@@ -1,0 +1,7 @@
+-r runtime.in
+pandas==1.5.3
+scikit-learn==1.6.1
+xlrd==2.0.1
+tensorflow-data-validation==1.16.1
+numpy==1.26.4
+dill==0.3.1.1

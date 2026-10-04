@@ -2,7 +2,7 @@
 
 Team project for building and demonstrating an end-to-end ML production system: raw data → validation → training → evaluation → approval → containerized API → monitoring → retraining and rollback.
 
-**Current status: P0 integration framework implemented; friends' components pending.** The chosen topic is credit-default prediction using [UCI dataset 350](https://archive.ics.uci.edu/dataset/350). P0 supplies the pipeline runner/worker, Airflow DAG, gate policy, Docker Compose/wrappers, tests and GitHub Actions workflows. P1–P3 still supply real data/TFDV, models/MLflow, API and monitoring adapters. Full preflight deliberately fails until adapters and approved numeric gates exist. Docker is unavailable on the implementation host, so containers and the real lifecycle remain unverified. See [P0 handoff](docs/P0_HANDOFF.md).
+**Current status: P0 framework and P1 data/features implemented; P2/P3 components pending.** P1 adds checksum-verified UCI ingestion, strict validation and TFDV adapter/schema, reproducible splits, shared train-only preprocessing and feature drift. See [P1 handoff](docs/P1_HANDOFF.md) for measured source policy, consumer interfaces, dependency lock and verification limits. P0 supplies orchestration/deployment; models/MLflow, API and monitoring exports remain pending. Full preflight still blocks missing adapters and numeric gates. Docker/TFDV Linux runtime and the complete lifecycle remain unverified locally. See [P0 handoff](docs/P0_HANDOFF.md).
 
 The original [course requirements](./โครงงานรายวิชา%20CP413008%20Machine%20Learning%20Engineering%20for%20Production.docx.md) are the authority. The project docs translate them into work items; they do not replace the brief.
 
