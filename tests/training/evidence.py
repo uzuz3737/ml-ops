@@ -245,7 +245,7 @@ def main():
         "scope": "P2 real-data component verification with provisional numeric-scaler fixture; not full production integration",
         "code_commit": evaluation["code_commit"],
         "source_tree_sha256": evaluation["source_tree_sha256"],
-        "verification_harness_sha256": sha256_file(__file__),
+        "verification_harness_sha256": sha256_file(Path(__file__)),
         "archive_sha256": sha256_file(args.archive),
         "dataset_version": dataset_version,
         "source": "https://archive.ics.uci.edu/dataset/350",
