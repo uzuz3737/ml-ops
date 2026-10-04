@@ -189,7 +189,10 @@ def snapshot_context(tmp_path):
     }
     path = tmp_path / "snapshot.json"
     path.write_text(json.dumps(manifest))
-    ctx["config"]["dataset"] = {"retraining_snapshots": {"regime-v2": pipeline._ref(path)}}
+    ctx["config"]["dataset"] = {
+        "retraining_snapshots": {"regime-v2": pipeline._ref(path)},
+        "protected_final_test_ids": refs["protected"],
+    }
     ctx["retraining"] = {
         "candidate_dataset_version": "regime-v2",
         "candidate_dataset_approved": True,
@@ -241,6 +244,32 @@ def test_snapshot_rejects_unapproved_changed_or_leaking_data(tmp_path, fault):
             )
     with pytest.raises(PipelineError):
         pipeline.ingest(ctx)
+    assert (tmp_path / "data-validation-alert.json").is_file()
+
+
+def test_snapshot_cannot_replace_trusted_holdout(tmp_path):
+    ctx = snapshot_context(tmp_path)
+    ctx["config"]["dataset"]["protected_final_test_ids"] = {"uri": "other.json", "sha256": "0" * 64}
+    with pytest.raises(PipelineError, match="configured original final-test"):
+        pipeline.ingest(ctx)
+
+
+def test_real_snapshot_validation_when_tfdv_available(tmp_path):
+    pytest.importorskip("tensorflow_data_validation")
+    ctx = snapshot_context(tmp_path)
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir()
+    schema_dir.joinpath("credit_default.pbtxt").write_bytes(
+        (Path(__file__).parents[1] / "schemas/credit_default.pbtxt").read_bytes()
+    )
+    ctx["inputs"] = {"ingest": pipeline.ingest(ctx)}
+    checked = pipeline.validate(ctx)
+    assert checked["passed"]
+    assert "approved_partitions" in checked
+    ctx["inputs"] = {"validate": checked}
+    partitions = pipeline.split(ctx)
+    ctx["inputs"] = {"split": partitions}
+    assert pipeline.features(ctx)["fit_partition"] == "train"
 
 
 @pytest.mark.parametrize(

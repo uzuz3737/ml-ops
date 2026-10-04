@@ -111,7 +111,21 @@ def ingest(context):
 def _ingest_snapshot(context):
     from mlops_project.data.snapshots import load_snapshot
 
-    frame, partitions, provenance = load_snapshot(context)
+    try:
+        frame, partitions, provenance = load_snapshot(context)
+    except PipelineError as error:
+        _write(
+            context,
+            "data-validation-alert.json",
+            {
+                **_base(context),
+                "event": "snapshot_ingestion_failed",
+                "severity": "critical",
+                "passed": False,
+                "error": error.as_dict(),
+            },
+        )
+        raise
     path = Path(context["run_dir"]) / "data.json"
     frame.to_json(path, orient="records")
     result = {

@@ -60,7 +60,12 @@ def load_snapshot(context):
             "invalid_snapshot",
             "Retraining snapshot needs independent train/validation partitions only.",
         )
-    protected = read(manifest.get("protected_ids"))
+    trusted_holdout = context["config"]["dataset"].get("protected_final_test_ids")
+    if not trusted_holdout or manifest.get("protected_ids") != trusted_holdout:
+        raise PipelineError(
+            "snapshot_leakage", "Snapshot must use the configured original final-test ID manifest."
+        )
+    protected = read(trusted_holdout)
     if (
         not isinstance(protected, list)
         or not protected
