@@ -2,7 +2,7 @@
 
 Owner: **@pairot230**. The P2 implementation is ready for component review. It includes three genuine tracked experiments, fitted bundles, validation selection, immutable registration/retrieval, deployment finalization/recovery, a protected final-test assessment, delayed-label joins and labeled-quality signals. Real UCI component measurements are in [REPORT.md](REPORT.md).
 
-This contribution changes only P2-owned source/test paths. P1 still owns production acquisition, TFDV, splitting and shared transforms; P3 owns serving, benchmarking, metrics export and dashboards; P0 owns integration, approval policy, orchestration and deployment verification. No shared configuration, root documentation, CI or teammate implementation was changed.
+The model implementation changes P2-owned source/test paths. At the owner's subsequent request, CI is split into ten independent checks and the existing P0 callback test fixture is adapted for the added registry directory and realistic child-process startup. P1 still owns production acquisition, TFDV, splitting and shared transforms; P3 owns serving, benchmarking, metrics export and dashboards; P0 owns integration, approval policy, orchestration and deployment verification. Shared runtime configuration and teammate implementation logic are unchanged.
 
 ## Install and test
 
@@ -127,8 +127,8 @@ The reference is pinned to the same model version and reference ID and contains 
 ## Integration actions for reviewers
 
 1. **P1:** provide the reviewed split/factory contract above, agree worker dependency compatibility and confirm leakage/feature policy.
-2. **P0:** set the real container commit, integrate the P2 dependency lock, review measured model/quality policy proposals, and record rejected gate decisions. No shared policy was silently approved here.
+2. **P0:** set the real container commit, review CI's use of the P2 dependency lock, review measured model/quality policy proposals, and record rejected gate decisions. No shared policy was silently approved here.
 3. **P3:** load verified bundles, run candidate benchmarks and exact-version watcher/ACK/rollback acceptance, consume the quality reports and export metrics.
-4. **P0 test fixture:** the unchanged `test_callback_executes_in_real_bounded_child_with_exact_action` assumes Registry does not exist after copying the source, and gives a real subprocess only 0.2 seconds. [p0-test-compatibility.patch](p0-test-compatibility.patch) proposes `mkdir(exist_ok=True)` and a 2-second callback budget for that fixture. It is supplied for P0 review and was applied only in a temporary verification copy. The original repository suite still has this known fixture failure.
+4. **P0 test fixture:** the callback fixture now uses `mkdir(exist_ok=True)` and a 2-second callback budget, preserving its real subprocess and action assertions. This integration adjustment was made with the requested ten-check CI update; the earlier proposed patch has been superseded.
 
 AI assistance: Codex assisted implementation, failure checks and verification. The owner remains @pairot230 and must review/explain the contribution and obtain the consumer reviews required by the course. No reviewer approval, individual understanding, full production lifecycle or external submission is fabricated.
