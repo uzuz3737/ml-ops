@@ -1,13 +1,16 @@
 """Load a trusted model bundle and hold the one currently serving.
 
-Bundle format (agree with P2 before the first real model): a joblib file
-containing {"model": fitted sklearn pipeline, "threshold": float}. The
-pipeline already includes P1's fitted transforms; nothing is fitted here.
+Reads P2's bundle.joblib: {"pipeline": fitted preprocessor + estimator,
+"manifest": {threshold, feature_columns, schema_version, environment, ...}}.
+Same checks as training.bundle.load_bundle, minus the mlflow import, so the
+API image does not need MLflow installed. Nothing is fitted here.
 """
 
 from __future__ import annotations
 
+import importlib.metadata
 import math
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,15 +66,51 @@ def resolve_artifact(uri: str, root: Path) -> Path:
     return confined_path(uri, root, must_exist=True)
 
 
-def _unpack(obj) -> tuple[Any, float]:
-    if not isinstance(obj, dict) or "model" not in obj or "threshold" not in obj:
-        raise PipelineError("invalid_bundle", "Bundle must contain model and threshold.")
-    threshold = obj["threshold"]
+# Pickled sklearn objects only load reliably with the exact versions used to train.
+PINNED_PACKAGES = ("scikit-learn", "numpy", "pandas", "joblib")
+
+
+def runtime_environment() -> dict:
+    def version(name):
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    return {
+        "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "packages": {name: version(name) for name in PINNED_PACKAGES},
+    }
+
+
+def _unpack(obj, schema_version: str, features: tuple[str, ...]) -> tuple[Any, dict]:
+    if not isinstance(obj, dict) or "pipeline" not in obj or "manifest" not in obj:
+        raise PipelineError("invalid_bundle", "Bundle must contain pipeline and manifest.")
+    meta = obj["manifest"]
+    if not isinstance(meta, dict) or type(meta.get("contract_version")) is not int:
+        raise PipelineError("invalid_bundle", "Bundle manifest is missing contract_version.")
+    if meta["contract_version"] != 1:
+        raise PipelineError("invalid_bundle", "Unsupported bundle contract_version.")
+    if meta.get("schema_version") != schema_version:
+        raise PipelineError("incompatible_schema", "Bundle schema differs from the manifest.")
+    columns = meta.get("feature_columns")
+    if not isinstance(columns, list) or set(columns) != set(features):
+        raise PipelineError("incompatible_schema", "Bundle features differ from serving schema.")
+    threshold = meta.get("threshold")
     if isinstance(threshold, bool) or not isinstance(threshold, int | float):
         raise PipelineError("invalid_bundle", "Bundle threshold must be a number.")
     if not 0 < threshold < 1:
         raise PipelineError("invalid_bundle", "Bundle threshold must be inside (0, 1).")
-    return obj["model"], float(threshold)
+    expected = meta.get("environment") or {}
+    actual = runtime_environment()
+    packages = expected.get("packages") or {}
+    if expected.get("python") != actual["python"] or any(
+        packages.get(name) != actual["packages"][name] for name in PINNED_PACKAGES
+    ):
+        raise PipelineError(
+            "incompatible_environment", "Bundle was trained with other library versions."
+        )
+    return obj["pipeline"], meta
 
 
 def load_model(manifest: dict, root: Path, features: tuple[str, ...]) -> LoadedModel:
@@ -82,15 +121,14 @@ def load_model(manifest: dict, root: Path, features: tuple[str, ...]) -> LoadedM
     import joblib
 
     try:
-        predictor, threshold = _unpack(joblib.load(path))
-    except PipelineError:
-        raise
+        loaded = joblib.load(path)
     except Exception:
         raise PipelineError("model_load_failed", "Bundle could not be deserialized.") from None
+    predictor, meta = _unpack(loaded, manifest["schema_version"], features)
 
     classes = [int(c) for c in getattr(predictor, "classes_", [])]
-    if not hasattr(predictor, "predict_proba") or 1 not in classes:
-        raise PipelineError("invalid_bundle", "Model needs predict_proba and class 1.")
+    if not hasattr(predictor, "predict_proba") or set(classes) != {0, 1}:
+        raise PipelineError("invalid_bundle", "Model needs predict_proba over classes 0/1.")
 
     return LoadedModel(
         deployment_id=manifest["deployment_id"],
@@ -98,9 +136,9 @@ def load_model(manifest: dict, root: Path, features: tuple[str, ...]) -> LoadedM
         model_version=manifest["model_version"],
         schema_version=manifest["schema_version"],
         artifact_sha256=manifest["artifact_sha256"],
-        features=features,
+        features=tuple(meta["feature_columns"]),
         predictor=predictor,
-        threshold=threshold,
+        threshold=float(meta["threshold"]),
         positive_index=classes.index(1),
     )
 

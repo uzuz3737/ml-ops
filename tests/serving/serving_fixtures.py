@@ -8,6 +8,7 @@ import yaml
 
 from mlops_project.pipelines.contracts import sha256_file
 from mlops_project.pipelines.runner import atomic_json
+from mlops_project.serving.bundle import runtime_environment
 from mlops_project.serving.settings import Settings
 
 REPO = Path(__file__).resolve().parents[2]
@@ -51,11 +52,26 @@ def make_settings(root: Path, **overrides) -> Settings:
     return Settings(**values)
 
 
-def publish_bundle(root: Path, version: str, model=None, threshold=0.5) -> dict:
+def bundle_manifest(**changes) -> dict:
+    """Shaped like P2's training manifest, trimmed to what serving reads."""
+    return {
+        "contract_version": 1,
+        "schema_version": "credit-default-v1",
+        "feature_columns": list(FEATURES),
+        "threshold": 0.5,
+        "environment": runtime_environment(),
+        **changes,
+    }
+
+
+def publish_bundle(root: Path, version: str, model=None, **manifest_changes) -> dict:
     """Write a bundle plus a passing gate report and return a deploy manifest."""
-    bundle = root / f"artifacts/models/v{version}/model.joblib"
+    bundle = root / f"artifacts/runs/run-{version}/train_baseline/bundle.joblib"
     bundle.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": model or FakeModel(), "threshold": threshold}, bundle)
+    joblib.dump(
+        {"pipeline": model or FakeModel(), "manifest": bundle_manifest(**manifest_changes)},
+        bundle,
+    )
     artifact_sha = sha256_file(bundle)
     report = root / f"artifacts/runs/run-{version}/gate-report.json"
     atomic_json(

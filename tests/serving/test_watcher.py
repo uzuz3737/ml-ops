@@ -133,3 +133,22 @@ def test_restarted_watcher_reloads_current_manifest(setup, tmp_path):
     fresh_slot = ModelSlot()
     DeploymentWatcher(settings, fresh_slot).check_once()
     assert fresh_slot.get().model_version == "1"
+
+
+@pytest.mark.parametrize(
+    ("changes", "code"),
+    [
+        ({"environment": {"python": "3.9", "packages": {}}}, "incompatible_environment"),
+        ({"feature_columns": ["LIMIT_BAL", "AGE"]}, "incompatible_schema"),
+        ({"threshold": 1.5}, "invalid_bundle"),
+    ],
+)
+def test_bundle_manifest_must_match_serving(setup, tmp_path, changes, code):
+    settings, slot, watcher = setup
+    request_deploy(settings, publish_bundle(tmp_path, "4", **changes))
+    watcher.check_once()
+
+    ack = read_ack(settings, "deploy-v4")
+    assert ack["status"] == "failed"
+    assert ack["error"]["code"] == code
+    assert slot.get() is None
