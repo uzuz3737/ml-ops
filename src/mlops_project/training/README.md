@@ -44,7 +44,7 @@ The first three consume `context.inputs.features`. P1 supplies a project-relativ
 ```json
 {
   "split_manifest": {"uri": "artifacts/runs/example/split-manifest.json", "sha256": "actual-64-character-lowercase-checksum"},
-  "preprocessor_factory": "mlops_project.features.pipeline:build_preprocessor"
+  "preprocessor_factory": "mlops_project.features:build_preprocessor"
 }
 ```
 

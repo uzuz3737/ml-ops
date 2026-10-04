@@ -36,3 +36,10 @@ def serving_frame(records):
     if validate_rows(records, training=False):
         raise ValueError("Invalid credit-default serving records")
     return pd.DataFrame(records, columns=FEATURES)
+
+
+def build_preprocessor(*, feature_columns):
+    """Factory P2 calls through `preprocessor_factory`; returns an unfitted transformer."""
+    if list(feature_columns) != list(FEATURES):
+        raise ValueError("Preprocessor expects the reviewed feature order")
+    return build_transformer()

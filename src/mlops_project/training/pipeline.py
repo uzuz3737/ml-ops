@@ -129,7 +129,7 @@ def _train(context, stage):
         "random_seed": seed,
         "hyperparameters": model.named_steps["estimator"].get_params(),
         "preprocessor_factory": source.get(
-            "preprocessor_factory", "mlops_project.features.pipeline:build_preprocessor"
+            "preprocessor_factory", "mlops_project.features:build_preprocessor"
         ),
         "environment": environment(),
         "dependency_lock_sha256": sha256_file(lock),
