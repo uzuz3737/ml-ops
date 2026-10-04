@@ -392,11 +392,16 @@ def test_callback_executes_in_real_bounded_child_with_exact_action(system, monke
         source, root / "src/mlops_project", ignore=shutil.ignore_patterns("__pycache__")
     )
     registry = root / "src/mlops_project/registry"
-    registry.mkdir()
+    registry.mkdir(exist_ok=True)
     (registry / "__init__.py").write_text("", encoding="utf-8")
     (registry / "pipeline.py").write_text(
         "from pathlib import Path\nimport json\ndef finalize_deployment(context):\n    Path(context['run_dir'], 'callback.json').write_text(json.dumps(context))\n    return {'contract_version': 1, 'passed': True, 'model_version': context['model_version']}\n",
         encoding="utf-8",
+    )
+    callback_context = context()
+    callback_context["config"]["pipeline"]["deployment_timeout_seconds"] = 2
+    Path(callback_context["config_path"]).write_text(
+        yaml.safe_dump(callback_context["config"]), encoding="utf-8"
     )
     monkeypatch.setattr(deployment, "_run_adapter", runner._run_adapter)
     result = deployment.deploy(context())
