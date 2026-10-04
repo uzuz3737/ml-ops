@@ -88,7 +88,12 @@ def test_oversized_body_is_413(served):
         ({"instances": [_instance()] * 6}, "batch_size"),
         ({"instances": [_instance(SEX=None)]}, "null"),
         ({"instances": [_instance(AGE="35")]}, "type"),
-        ({"instances": [_instance(AGE=35.5)]}, "type"),
+        ({"instances": [_instance(AGE=35.5)]}, "not_integer"),
+        ({"instances": [_instance(SEX=3)]}, "out_of_domain"),
+        ({"instances": [_instance(PAY_0=10)]}, "out_of_domain"),
+        ({"instances": [_instance(AGE=0)]}, "out_of_range"),
+        ({"instances": [_instance(PAY_AMT1=-1)]}, "out_of_range"),
+        ({"instances": [_instance(LIMIT_BAL=10**400)]}, "non_finite"),
         ({"instances": [_instance(PAY_0=True)]}, "type"),
         ({"instances": [_instance(default_next_month=1)]}, "unexpected_field"),
         ({"instances": [{k: v for k, v in _instance().items() if k != "LIMIT_BAL"}]},
@@ -206,3 +211,9 @@ def test_event_files_match_p2_label_join_format(served, settings):
     assert feedback["request_id"] == request_id
     assert feedback["labels"] == [{"instance_index": 1, "label": 1}]
     assert feedback["observed_at"] == "2099-01-01T00:00:00Z"
+
+
+def test_values_p1_allows_are_accepted(served):
+    # negative bills and the extra EDUCATION/MARRIAGE codes are real in UCI 350
+    body = {"instances": [_instance(BILL_AMT1=-5000, EDUCATION=6, MARRIAGE=0, PAY_0=-2, AGE=35.0)]}
+    assert served.post("/predict", json=body).status_code == 200

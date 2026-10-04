@@ -1,17 +1,24 @@
 """Strict request checks for /predict.
 
-TFDV is too heavy for the request path, so this mirrors the serving
-environment of the reviewed schema: all 23 features, no target, no nulls.
-Range/category limits are added once P1 freezes credit_default.pbtxt.
+TFDV is too heavy for the request path. The rules here are P1's serving row
+policy (mlops_project.data.policy) spelled out per field, so a client gets the
+exact field and reason; validate_rows() still runs last as the source of truth.
 """
 
 from __future__ import annotations
 
 import math
 
-INTEGER_FEATURES = frozenset(
-    {"SEX", "EDUCATION", "MARRIAGE", "AGE", "PAY_0", "PAY_2", "PAY_3", "PAY_4", "PAY_5", "PAY_6"}
-)
+from ..data.policy import DOMAINS, validate_rows
+
+POSITIVE = frozenset({"AGE", "LIMIT_BAL"})
+
+
+def _finite(value) -> bool:
+    try:
+        return math.isfinite(value)
+    except OverflowError:  # ints beyond float range
+        return False
 
 
 def _issue(rule: str, message: str, index: int | None = None, field: str | None = None) -> dict:
@@ -38,10 +45,18 @@ def check_instance(index: int, instance, features: tuple[str, ...]) -> list[dict
             problems.append(_issue("null", "Null is not allowed for this feature.", index, name))
         elif isinstance(value, bool) or not isinstance(value, int | float):
             problems.append(_issue("type", "Feature must be a JSON number.", index, name))
-        elif not math.isfinite(value):
-            problems.append(_issue("non_finite", "NaN and infinity are rejected.", index, name))
-        elif name in INTEGER_FEATURES and not isinstance(value, int):
-            problems.append(_issue("type", "Feature must be an integer code.", index, name))
+        elif not _finite(value):
+            problems.append(_issue("non_finite", "Value must be a finite number.", index, name))
+        elif value != int(value):
+            problems.append(_issue("not_integer", "Feature must be a whole number.", index, name))
+        elif name in DOMAINS and value not in DOMAINS[name]:
+            problems.append(_issue("out_of_domain", "Code is not a known category.", index, name))
+        elif name in POSITIVE and value <= 0:
+            problems.append(_issue("out_of_range", "Value must be positive.", index, name))
+        elif name.startswith("PAY_AMT") and value < 0:
+            problems.append(_issue("out_of_range", "Payment cannot be negative.", index, name))
+    if not problems and validate_rows([instance], training=False):
+        problems.append(_issue("policy", "Instance violates the data policy.", index))
     return problems
 
 
