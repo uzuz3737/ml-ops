@@ -41,6 +41,11 @@ jobs:
             command: pytest tests/registry
           - name: Delayed labels and quality monitoring
             command: pytest tests/monitoring/test_quality.py
+          - name: P1 to P2 data contract
+            command: pytest tests/test_p1_p2_contract.py
+          - name: Serving API, watcher and benchmark
+            extra: requirements/serving.lock
+            command: pytest tests/serving tests/monitoring/test_exporters.py
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,5 +55,8 @@ jobs:
           cache-dependency-path: src/mlops_project/training/requirements-dev.lock
       - name: Install locked development and model dependencies
         run: python -m pip install --require-hashes -r src/mlops_project/training/requirements-dev.lock
+      - name: Install extra component lock
+        if: matrix.extra
+        run: python -m pip install --require-hashes -r ${{ matrix.extra }} && python -m pip check
       - name: Run check
         run: ${{ matrix.command }}
