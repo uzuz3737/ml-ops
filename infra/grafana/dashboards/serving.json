@@ -249,6 +249,11 @@
           "refId": "A",
           "expr": "data_drift_score",
           "legendFormat": "{{feature}}"
+        },
+        {
+          "refId": "B",
+          "expr": "data_drift_threshold",
+          "legendFormat": "alert threshold"
         }
       ]
     },
@@ -298,6 +303,21 @@
           "refId": "A",
           "expr": "model_quality",
           "legendFormat": "{{metric}}"
+        },
+        {
+          "refId": "B",
+          "expr": "model_quality_degradation",
+          "legendFormat": "degradation"
+        },
+        {
+          "refId": "C",
+          "expr": "model_quality_label_coverage",
+          "legendFormat": "label coverage"
+        },
+        {
+          "refId": "D",
+          "expr": "model_quality_labeled_samples",
+          "legendFormat": "labeled samples"
         }
       ]
     },
