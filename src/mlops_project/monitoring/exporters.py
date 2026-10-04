@@ -5,8 +5,12 @@ publish_feature_drift / publish_quality, which write the latest result under
 artifacts/monitoring/exported/. The API's /metrics reads those files on each
 scrape, so Prometheus only has to scrape one target.
 
-Field names follow the monitoring result in INTERFACE_CONTRACTS.md; adjust
-_feature_scores / _quality_metrics once P1 and P2 hand over real output.
+Input shapes:
+- P1 feature_drift(): {"status": "measured" | "insufficient_samples",
+  "alert": bool, "metrics": {feature: psi}, "threshold": float}
+- P2 evaluate_quality(): {"status": "ok" | "alert" | "insufficient_data",
+  "metrics": {...}, "observed": float, "labeled_sample_count": int, ...}
+Both are stored with a status from the contract set (ok/alert/insufficient_data/error).
 """
 
 from __future__ import annotations
@@ -25,22 +29,30 @@ FEATURE_DRIFT_FILE = "feature_drift.json"
 QUALITY_FILE = "quality.json"
 
 
-def _check_status(result: dict) -> str:
+def _drift_status(result: dict) -> str:
     status = result.get("status")
-    if status not in STATUSES:
-        raise ValueError(f"status must be one of {STATUSES}")
-    return status
+    if status == "measured":
+        return "alert" if result.get("alert") is True else "ok"
+    if status == "insufficient_samples":
+        return "insufficient_data"
+    if status in STATUSES:
+        return status
+    raise ValueError(f"unknown feature-drift status: {status!r}")
 
 
 def publish_feature_drift(result: dict, directory: Path) -> Path:
-    _check_status(result)
     path = Path(directory) / FEATURE_DRIFT_FILE
-    atomic_json(path, {**result, "exported_at": utc_now()})
+    atomic_json(
+        path,
+        {**result, "source_status": result.get("status"), "status": _drift_status(result),
+         "exported_at": utc_now()},
+    )  # fmt: skip
     return path
 
 
 def publish_quality(result: dict, directory: Path) -> Path:
-    _check_status(result)
+    if result.get("status") not in STATUSES:
+        raise ValueError(f"quality status must be one of {STATUSES}")
     path = Path(directory) / QUALITY_FILE
     atomic_json(path, {**result, "exported_at": utc_now()})
     return path
@@ -59,7 +71,7 @@ def _finite(value) -> bool:
 
 
 def _feature_scores(result: dict) -> dict:
-    scores = result.get("feature_scores", {})
+    scores = result.get("metrics", {})
     return scores if isinstance(scores, dict) else {}
 
 
@@ -97,6 +109,10 @@ class MonitoringCollector:
                 if feature in self.features and _finite(value):
                     scores.add_metric([feature], float(value))
         yield scores
+        threshold = GaugeMetricFamily("data_drift_threshold", "PSI alert threshold from P1")
+        if drift and _finite(drift.get("threshold")):
+            threshold.add_metric([], float(drift["threshold"]))
+        yield threshold
 
         yield self._status_family("model_quality_status", "Latest labeled-quality result", quality)
         metrics = GaugeMetricFamily(
@@ -107,7 +123,12 @@ class MonitoringCollector:
                 if name in QUALITY_METRICS and _finite(value):
                     metrics.add_metric([name], float(value))
         yield metrics
-        labeled = GaugeMetricFamily("model_quality_labeled_samples", "Labels in the quality window")
-        if quality and _finite(quality.get("labeled_count")):
-            labeled.add_metric([], float(quality["labeled_count"]))
-        yield labeled
+        for name, key, help_text in (
+            ("model_quality_labeled_samples", "labeled_sample_count", "Labels in the window"),
+            ("model_quality_label_coverage", "label_coverage", "Labeled share of predictions"),
+            ("model_quality_degradation", "observed", "Worst metric drop vs reference"),
+        ):
+            family = GaugeMetricFamily(name, help_text)
+            if quality and _finite(quality.get(key)):
+                family.add_metric([], float(quality[key]))
+            yield family
