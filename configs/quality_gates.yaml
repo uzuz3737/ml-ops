@@ -1,16 +1,16 @@
 contract_version: 1
 policy_version: credit-default-promotion-v1
-status: pending-baseline
+status: initial-from-measured-baseline
 gates:
   metric:
     name: average_precision
     direction: maximize
     positive_class: 1
-    # @uzuz3737 and @pairot230 set this from training/validation evidence.
-    minimum: null
+    # Measured baseline AP 0.476 (training/REPORT.md); floor sits above prevalence ~0.221.
+    minimum: 0.40
   comparison:
     # Absolute allowed AP loss against the comparison model on the same population.
-    max_regression: null
+    max_regression: 0.02
   service:
     # Provisional team targets; confirm workload/hardware before treating as SLOs.
     p95_latency_ms_max: 300.0
