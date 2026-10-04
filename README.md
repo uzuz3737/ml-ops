@@ -126,8 +126,6 @@ TFDV ติดตั้งได้เฉพาะบน Linux เลยทำ�
 | [Testing and demo](docs/TESTING_AND_DEMO.md) / [Report template](docs/REPORT_TEMPLATE.md) | แผนเดโม / สิ่งที่ต้องส่ง |
 | [Team work](docs/TEAM_WORK.md) / [Development plan](docs/DEVELOPMENT_PLAN.md) | การแบ่งงานและตารางเวลา |
 
-โจทย์วิชา: [CP413008 requirements](./โครงงานรายวิชา%20CP413008%20Machine%20Learning%20Engineering%20for%20Production.docx.md) ส่งงาน **5 ต.ค. 2026 เวลา 23:59** นำเสนอ **12 ต.ค. 2026 เวลา 08:30** (เวลาไทย)
-
 ---
 
 ## English
@@ -251,5 +249,3 @@ File ownership is in [CODEOWNERS](.github/CODEOWNERS); how to contribute is in [
 | [P2 results](src/mlops_project/training/REPORT.md) | Experiment metrics and model selection |
 | [Testing and demo](docs/TESTING_AND_DEMO.md) / [Report template](docs/REPORT_TEMPLATE.md) | Demo plan; what to submit |
 | [Team work](docs/TEAM_WORK.md) / [Development plan](docs/DEVELOPMENT_PLAN.md) | Work packages and schedule |
-
-Course brief: [CP413008 requirements](./โครงงานรายวิชา%20CP413008%20Machine%20Learning%20Engineering%20for%20Production.docx.md). Submission **5 Oct 2026 23:59**, presentation **12 Oct 2026 08:30** (Asia/Bangkok).
