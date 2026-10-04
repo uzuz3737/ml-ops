@@ -1,0 +1,5 @@
+# One lock for the pipeline worker image: P1 data/TFDV, P2 training/MLflow and
+# P3's benchmark stage (which starts the API in-process) all run in it.
+-r p1-worker.in
+-r ../src/mlops_project/training/requirements.in
+-r serving.in
