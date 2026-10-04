@@ -25,6 +25,8 @@ done
 command -v docker >/dev/null 2>&1 || { printf 'Docker is required; install and start its Linux engine.\n' >&2; exit 1; }
 [[ -f .env ]] || { printf 'Create .env from .env.example and set local credentials first.\n' >&2; exit 1; }
 export PIPELINE_CONFIG="$config"
+# Training records the exact commit; the image itself has no .git directory.
+export MLOPS_CODE_COMMIT="${MLOPS_CODE_COMMIT:-$(git rev-parse HEAD 2>/dev/null || true)}"
 if [[ "$(uname -s)" == Linux ]]; then
   # A clean Linux clone is writable by its host user, including CI's runner UID.
   export APP_UID="${APP_UID:-$(id -u)}"

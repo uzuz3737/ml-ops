@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $previousConfig = $env:PIPELINE_CONFIG
+$previousCommit = $env:MLOPS_CODE_COMMIT
 Push-Location $projectRoot
 try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -37,6 +38,11 @@ try {
     }
     $relativeConfig = $configAbsolute.Substring($projectRoot.Length + 1).Replace('\', '/')
     $env:PIPELINE_CONFIG = $relativeConfig
+    # Training records the exact commit; the image itself has no .git directory.
+    if (-not $env:MLOPS_CODE_COMMIT) {
+        $commit = & git rev-parse HEAD 2>$null
+        if ($LASTEXITCODE -eq 0) { $env:MLOPS_CODE_COMMIT = $commit }
+    }
     foreach ($directory in @('data', 'artifacts', 'schemas', 'examples')) {
         New-Item -ItemType Directory -Path $directory -Force | Out-Null
     }
@@ -68,5 +74,6 @@ catch {
 }
 finally {
     $env:PIPELINE_CONFIG = $previousConfig
+    $env:MLOPS_CODE_COMMIT = $previousCommit
     Pop-Location
 }
