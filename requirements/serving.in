@@ -1,5 +1,10 @@
 -r api.in
 prometheus-client==0.21.1
-joblib==1.4.2
 httpx==0.28.1
-# scikit-learn/pandas get pinned here once P2 freezes the training lock
+# Must equal the versions P2 trains with (src/mlops_project/training/requirements.in);
+# the bundle loader refuses a model pickled under different versions.
+scikit-learn==1.6.1
+pandas==1.5.3
+numpy==1.26.4
+joblib==1.4.2
+scipy==1.14.1
