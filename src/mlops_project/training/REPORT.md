@@ -22,6 +22,18 @@ The verification harness uses all 30,000 rows, 23 features, client-disjoint stra
 
 The selected model is histogram gradient boosting because it has the highest validation AP. The AP difference from random forest is small and does not establish a statistically significant advantage. Calibration bins and all unrounded measurements are saved with each run. No final-test model evaluation was performed: that assessment remains reserved for the initial reviewed/frozen candidate.
 
+## Full pipeline run with P1 preprocessing (scikit-learn 1.6.1)
+
+The table above came from the component harness (numeric-only scaler, scikit-learn 1.5.2). After the P1/P2 alignment the same three experiments ran inside the real DAG: P1 ingest, TFDV validation, seed-42 split and P1's shared `build_preprocessor` (StandardScaler + one-hot categories), with scikit-learn 1.6.1 / pandas 1.5.3 so the bundle loads in the serving image. Airflow run `full-run-002`, validation population `6cab3d86…` (6,000 rows):
+
+| Model | Validation AP | ROC AUC | F1 | Precision | Recall | Brier score | Stored threshold |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Logistic regression (baseline) | 0.5147 | 0.7553 | 0.5163 | 0.5266 | 0.5064 | 0.1863 | 0.5431 |
+| Random forest | **0.5375** | **0.7774** | **0.5394** | 0.5298 | 0.5494 | 0.1731 | 0.5068 |
+| Histogram gradient boosting | 0.5358 | 0.7743 | 0.5326 | 0.5394 | 0.5260 | **0.1378** | 0.2889 |
+
+With P1's one-hot encoding of the repayment-status and demographic codes, the baseline gains about 0.04 AP and random forest is selected (highest validation AP; the margin over gradient boosting is 0.002 and is not a significant difference). It was registered as `models:/credit-default/2`, passed every gate (AP 0.5375 ≥ 0.40, regression vs baseline −0.023 ≤ 0.02, p95 204.5 ms, 60 req/s, 0% errors) and was deployed and verified. Evidence: `artifacts/runs/full-run-002/evaluation.json`, `registration.json`, `gate-report.json`. The final test is still untouched.
+
 Proposal for P0 review: initial AP floor **0.40**, absolute same-population regression allowance **0.02**. The floor is below the measured baseline AP 0.47585 but above positive prevalence approximately 0.221; this is an initial engineering proposal rather than a stakeholder-approved business metric. The regression allowance is not a confidence interval or permission to degrade a deployed system. Real candidate service gates cannot pass without P3's measurements. Shared policy remains unchanged and fail-closed.
 
 ## Controlled labeled-quality and retraining experiment

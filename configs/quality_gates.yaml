@@ -6,7 +6,7 @@ gates:
     name: average_precision
     direction: maximize
     positive_class: 1
-    # Measured baseline AP 0.476 (training/REPORT.md); floor sits above prevalence ~0.221.
+    # Baseline AP 0.476 (component harness) / 0.515 (full DAG run); floor sits above prevalence ~0.221.
     minimum: 0.40
   comparison:
     # Absolute allowed AP loss against the comparison model on the same population.
