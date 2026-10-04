@@ -1,0 +1,10 @@
+# P2-only runtime. P1/P0 coordinate the shared Linux worker lock separately.
+mlflow==2.19.0
+scikit-learn==1.5.2
+numpy==1.26.4
+pandas==2.2.3
+joblib==1.4.2
+PyYAML==6.0.2
+sqlalchemy==2.0.37
+scipy==1.14.1
+matplotlib==3.9.4
