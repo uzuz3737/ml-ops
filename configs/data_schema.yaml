@@ -1,5 +1,5 @@
 contract_version: 1
-status: pending-profile-and-reviewed-tfdv-schema
+status: profiled-awaiting-peer-review
 owner: OuanEng
 schema_path: schemas/credit_default.pbtxt
 schema_version: credit-default-v1

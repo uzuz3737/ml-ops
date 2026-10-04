@@ -48,6 +48,9 @@ class PreflightTests(unittest.TestCase):
         (self.root / "quality.yaml").write_text(yaml.safe_dump(self.quality), encoding="utf-8")
 
     def test_missing_modules_are_reported_and_block_pipeline(self):
+        config = yaml.safe_load(self.config.read_text())
+        config["pipeline"]["adapters"]["ingest"] = "mlops_project.unimplemented:ingest"
+        self.config.write_text(yaml.safe_dump(config))
         report = preflight(self.config, project_root=self.root)
         self.assertFalse(report["passed"])
         errors = [check.get("error", {}) for check in report["checks"]]
