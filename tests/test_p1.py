@@ -17,7 +17,11 @@ from sklearn.linear_model import LogisticRegression
 from mlops_project.data import pipeline
 from mlops_project.data.policy import FEATURES, TARGET, validate_rows
 from mlops_project.features import build_pipeline, serving_frame
-from mlops_project.monitoring.feature_drift import feature_drift, shifted_fixture
+from mlops_project.monitoring.feature_drift import (
+    calibrate_threshold,
+    feature_drift,
+    shifted_fixture,
+)
 from mlops_project.pipelines.contracts import PipelineError
 
 
@@ -136,6 +140,16 @@ def test_drift_sample_rule_and_shift():
     assert feature_drift(frame, frame.iloc[:10])["status"] == "insufficient_samples"
 
 
+def test_train_reference_calibration_is_reproducible_and_detects_shift():
+    frame = pd.DataFrame(rows())
+    report = calibrate_threshold(frame, window_rows=200, trials=20)
+    assert report == calibrate_threshold(frame, window_rows=200, trials=20)
+    assert not feature_drift(frame, frame, threshold=report["threshold"])["alert"]
+    assert feature_drift(frame, shifted_fixture(frame), threshold=report["threshold"])["alert"]
+    with pytest.raises(ValueError):
+        calibrate_threshold(frame.iloc[:10])
+
+
 def test_real_tfdv_schema_when_available(tmp_path):
     pytest.importorskip("tensorflow_data_validation")
     failures, refs = pipeline._tfdv(
@@ -162,6 +176,23 @@ def test_real_uci_stages(tmp_path):
     assert [p["row_count"] for p in partitioned["partitions"].values()] == [18000, 6000, 3000, 3000]
     ctx["inputs"] = {"split": partitioned}
     assert pipeline.features(ctx)["fit_partition"] == "train"
+    train = pipeline._read(ctx, partitioned["partitions"]["train"]["data"])
+    monitoring = pipeline._read(ctx, partitioned["partitions"]["monitoring"]["data"])
+    calibration = calibrate_threshold(train, window_rows=len(monitoring))
+    healthy = feature_drift(
+        train, monitoring, minimum_rows=len(monitoring), threshold=calibration["threshold"]
+    )
+    shifted = feature_drift(
+        train,
+        shifted_fixture(monitoring),
+        minimum_rows=len(monitoring),
+        threshold=calibration["threshold"],
+    )
+    pipeline._write(ctx, "drift-calibration.json", calibration)
+    pipeline._write(ctx, "healthy-drift.json", healthy)
+    pipeline._write(ctx, "synthetic-shift-drift.json", shifted)
+    assert not healthy["alert"]
+    assert shifted["alert"]
 
 
 def snapshot_context(tmp_path):
