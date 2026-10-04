@@ -53,6 +53,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     events = EventStore(settings.events_dir)
     watcher = DeploymentWatcher(settings, slot)
     collector = MonitoringCollector(settings.monitoring_dir, settings.features)
+    # Concurrent predict_proba calls fight over the GIL and all slow down;
+    # scoring one batch at a time keeps each call at full speed.
+    inference_lock = threading.Lock()
+
+    def score(model, instances):
+        with inference_lock:
+            return model.predict(instances)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -129,7 +136,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return _error(503, request_id, "model_not_ready", "No verified model is loaded.")
         instances = body["instances"]
         try:
-            predictions = await run_in_threadpool(model.predict, instances)
+            predictions = await run_in_threadpool(score, model, instances)
         except PipelineError as error:
             telemetry.log_event("predict_failed", request_id=request_id, error=error.code)
             return _error(500, request_id, "prediction_failed", "Model could not score the batch.")
