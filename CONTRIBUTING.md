@@ -4,10 +4,10 @@ The repository is [uzuz3737/ml-ops](https://github.com/uzuz3737/ml-ops). Each me
 
 | Member | Branch suggestion | Own implementation |
 | --- | --- | --- |
-| @uzuz3737 (P0, you) | `codex/p0-integration` | Integration, Airflow, runtime contracts, deployment/rollback, CI/CD, releases |
-| @OuanEng (P1) | `codex/p1-data-validation` | UCI data, TFDV, shared features, feature drift |
-| @pairot230 (P2) | `codex/p2-model-tracking` | Models, MLflow/Registry, candidate evaluation, labeled quality |
-| @thanachaithongbai-hue (P3) | `codex/p3-serving` | FastAPI, exact-version model watcher/ACK, performance, dashboards |
+| @uzuz3737 (P0, you) | `feature/p0-integration` | Integration, Airflow, runtime contracts, deployment/rollback, CI/CD, releases |
+| @OuanEng (P1) | `feature/p1-data-validation` | UCI data, TFDV, shared features, feature drift |
+| @pairot230 (P2) | `feature/p2-model-tracking` | Models, MLflow/Registry, candidate evaluation, labeled quality |
+| @thanachaithongbai-hue (P3) | `feature/p3-serving` | FastAPI, exact-version model watcher/ACK, performance, dashboards |
 
 Before starting, fetch the shared base, handle your local uncommitted changes and create your branch. Do not overwrite another person's files. Review the callable-stage contracts before implementing adapters; P0 owns shared integration files and each component lead supplies its own stage implementation and tests.
 
@@ -15,7 +15,7 @@ Before starting, fetch the shared base, handle your local uncommitted changes an
 git status
 git switch main
 git pull --ff-only
-git switch -c codex/p1-data-validation
+git switch -c feature/p1-data-validation
 ```
 
 Use the [setup commands](docs/GETTING_STARTED.md) and run Ruff, pytest and the documentation checker before your PR. Tests must verify behavior, failure cases and the consumer handoff. Update the relevant contracts, setup instructions and evidence. A passing framework fixture is not a successful full lifecycle.

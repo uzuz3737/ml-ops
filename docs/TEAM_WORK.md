@@ -70,7 +70,7 @@ Accept predictor/target mapping, planned 60/20/10/10 stratified seed-42 split, I
 
 Follow repository-specific rules if later added. Until then:
 
-1. Start from the agreed current base branch. P0's integration branch is `codex/p0-integration`; friends can use `codex/p1-data-validation`, `codex/p2-model-tracking` or `codex/p3-serving`. Friend branch names are suggestions until created.
+1. Start from the agreed current base branch. P0's integration branch is `feature/p0-integration`; friends can use `feature/p1-data-validation`, `feature/p2-model-tracking` or `feature/p3-serving`. Friend branch names are suggestions until created.
 2. Keep each PR a coherent working increment with a clear consumer and acceptance criteria. Make it small enough to review before the deadline.
 3. Update contracts before or with a breaking change. Notify producing and consuming leads; do not silently change field names, types, paths, metrics or artifact layouts.
 4. Attach actual tests/run evidence and report notes using the template below. The reviewer checks the consumer example and meaningful failure behavior.

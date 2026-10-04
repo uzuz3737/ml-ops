@@ -7,7 +7,7 @@
 ```powershell
 git clone https://github.com/uzuz3737/ml-ops.git
 Set-Location ml-ops
-git switch -c codex/p1-data-validation
+git switch -c feature/p1-data-validation
 ```
 
 Use your assigned branch suggestion from [Contributing](../CONTRIBUTING.md), your own Git identity and your own clone. Read [Dataset](DATASET.md), [contracts](INTERFACE_CONTRACTS.md) and the callable-stage details in [P0 handoff](P0_HANDOFF.md). Supply a minimal genuine component handoff early; record missing inputs and the responsible member.
