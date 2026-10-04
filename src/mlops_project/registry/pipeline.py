@@ -39,7 +39,14 @@ def register(context):
         {"uri": result["artifact_uri"], "sha256": result["artifact_sha256"]}, root
     )
     bundle = load_bundle(bundle_path, result["artifact_sha256"], result["schema_version"])
-    for key in ("run_id", "code_commit", "dataset_version", "schema_version", "config_sha256"):
+    for key in (
+        "run_id",
+        "code_commit",
+        "source_tree_sha256",
+        "dataset_version",
+        "schema_version",
+        "config_sha256",
+    ):
         if bundle["manifest"][key] != result[key]:
             raise ValueError("Registration bundle provenance differs from evaluation")
     if result["config_sha256"] != context["config_sha256"]:
@@ -57,6 +64,7 @@ def register(context):
     for key in (
         "artifact_sha256",
         "code_commit",
+        "source_tree_sha256",
         "dataset_version",
         "schema_version",
         "config_sha256",
@@ -93,6 +101,7 @@ def register(context):
                 "pipeline_run_id": context["run_id"],
                 "artifact_sha256": result["artifact_sha256"],
                 "code_commit": result["code_commit"],
+                "source_tree_sha256": result["source_tree_sha256"],
                 "dataset_version": result["dataset_version"],
                 "schema_version": result["schema_version"],
                 "config_sha256": context["config_sha256"],

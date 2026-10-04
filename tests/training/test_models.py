@@ -105,3 +105,29 @@ def test_retraining_requires_approved_new_data(training_context):
     context = {**training_context, "retraining": {"candidate_dataset_version": "new-regime"}}
     with pytest.raises(ValueError, match="approved independent"):
         load_inputs(context)
+
+
+def test_adapter_retry_never_hashes_its_own_mutable_result(training_context):
+    from mlops_project.training.pipeline import train_baseline
+
+    first = train_baseline(training_context)
+    second = train_baseline(training_context)
+    assert first["metrics"] == second["metrics"]
+    validate_result(
+        second, "train_baseline", training_context["run_id"], Path(training_context["run_dir"])
+    )
+    assert all(not artifact["uri"].endswith("result.json") for artifact in second["artifacts"])
+
+
+def test_container_declared_commit_is_used_without_git(training_context, monkeypatch):
+    from mlops_project.training import pipeline
+
+    training_context["config"]["training"]["code_commit"] = "d" * 40
+    monkeypatch.setattr(
+        pipeline, "code_commit", lambda root: (_ for _ in ()).throw(OSError("git unavailable"))
+    )
+    result = pipeline.train_baseline(training_context)
+    assert result["code_commit"] == "d" * 40
+    training_context["config"]["training"]["code_commit"] = "main"
+    with pytest.raises(ValueError, match="exact full"):
+        pipeline.train_baseline(training_context)

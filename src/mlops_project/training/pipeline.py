@@ -1,8 +1,10 @@
 """P2's callable training/evaluation stages for the P0 runner."""
 
+import hashlib
 import json
 import os
 import platform
+import re
 import subprocess
 from pathlib import Path
 
@@ -34,6 +36,29 @@ def tracking_uri(context):
 
 def code_commit(root):
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+
+
+def _provenance(context):
+    root = Path(context["project_root"])
+    commit = context["config"].get("training", {}).get("code_commit") or os.environ.get(
+        "MLOPS_CODE_COMMIT"
+    )
+    if not commit:
+        try:
+            commit = code_commit(root)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise ValueError(
+                "Container training requires training.code_commit or MLOPS_CODE_COMMIT"
+            ) from exc
+    if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", commit):
+        raise ValueError("Use an exact full lowercase Git commit")
+    digest = hashlib.sha256()
+    # Record actual source content too, including local changes. Container Git
+    # metadata is deliberately excluded by the existing Dockerfile.
+    for source in sorted((root / "src/mlops_project").rglob("*.py")):
+        digest.update(source.relative_to(root).as_posix().encode())
+        digest.update(source.read_bytes())
+    return {"code_commit": commit, "source_tree_sha256": digest.hexdigest()}
 
 
 def _estimator(stage, seed):
@@ -86,7 +111,7 @@ def _train(context, stage):
         "contract_version": 1,
         "run_id": context["run_id"],
         "experiment_id": stage,
-        "code_commit": code_commit(root),
+        **_provenance(context),
         "dataset_version": manifest["dataset_version"],
         "schema_version": manifest["schema_version"],
         "split_manifest_sha256": source["split_manifest"]["sha256"],
@@ -175,7 +200,7 @@ def _train(context, stage):
         "artifacts": [
             {"uri": p.relative_to(Path(context["run_dir"])).as_posix(), "sha256": sha256_file(p)}
             for p in directory.iterdir()
-            if p.is_file()
+            if p.is_file() and p.name != "result.json"
         ],
     }
     atomic_json(directory / "result.json", result)
@@ -201,6 +226,7 @@ def evaluate(context):
         for key in (
             "run_id",
             "code_commit",
+            "source_tree_sha256",
             "dataset_version",
             "schema_version",
             "validation_id",
@@ -231,6 +257,7 @@ def evaluate(context):
         for key in (
             "run_id",
             "code_commit",
+            "source_tree_sha256",
             "dataset_version",
             "schema_version",
             "validation_id",
@@ -325,8 +352,6 @@ def evaluate_final_test(context, selected, *, locked_candidate_sha256):
         "artifact_sha256": locked_candidate_sha256,
         "final_test_sha256": reference["sha256"],
     }
-    import hashlib
-
     ledger_id = hashlib.sha256(manifest["dataset_version"].encode()).hexdigest()
     ledger_dir = root / "artifacts/final-test"
     ledger_dir.mkdir(parents=True, exist_ok=True)

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 
 from mlops_project.pipelines.contracts import PipelineError, confined_path, sha256_file
 
@@ -99,4 +100,6 @@ def shared_preprocessor(source, manifest):
     transformer = factory(feature_columns=manifest["feature_columns"])
     if not hasattr(transformer, "fit") or not hasattr(transformer, "transform"):
         raise ValueError("P1 factory must return an unfitted sklearn-compatible transformer")
-    return transformer
+    # Reset accidental fitted state returned by a shared factory. All learned
+    # parameters are fitted by the complete pipeline on training rows only.
+    return clone(transformer)

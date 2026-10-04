@@ -1,6 +1,7 @@
 """Load trusted checksum-bound P2 artifacts; never fit at prediction time."""
 
 import importlib.metadata
+import platform
 import sys
 from pathlib import Path
 
@@ -16,7 +17,13 @@ PACKAGES = ("scikit-learn", "numpy", "pandas", "joblib", "mlflow")
 def environment():
     return {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "python_full": platform.python_version(),
         "packages": {name: importlib.metadata.version(name) for name in PACKAGES},
+        "installed_packages": {
+            distribution.metadata["Name"]: distribution.version
+            for distribution in importlib.metadata.distributions()
+            if distribution.metadata["Name"]
+        },
     }
 
 
