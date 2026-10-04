@@ -8,9 +8,17 @@ pytest.importorskip("httpx")
 pytest.importorskip("joblib")
 
 from fastapi.testclient import TestClient  # noqa: E402
-from serving_fixtures import EXAMPLE, make_settings, publish_bundle, request_deploy  # noqa: E402
+from serving_fixtures import (  # noqa: E402
+    EXAMPLE,
+    REPO,
+    make_settings,
+    publish_bundle,
+    request_deploy,
+)
 
 from mlops_project.serving.app import create_app  # noqa: E402
+
+JSON = {"Content-Type": "application/json"}
 
 
 def _client(settings):
@@ -222,3 +230,18 @@ def test_values_p1_allows_are_accepted(served):
     # negative bills and the extra EDUCATION/MARRIAGE codes are real in UCI 350
     body = {"instances": [_instance(BILL_AMT1=-5000, EDUCATION=6, MARRIAGE=0, PAY_0=-2, AGE=35.0)]}
     assert served.post("/predict", json=body).status_code == 200
+
+
+INVALID_EXAMPLES = sorted((REPO / "examples/invalid").glob("*.json"))
+
+
+@pytest.mark.parametrize("path", INVALID_EXAMPLES, ids=lambda p: p.stem)
+def test_shipped_invalid_examples_are_rejected(served, path):
+    response = served.post("/predict", content=path.read_bytes(), headers=JSON)
+    assert response.status_code == 422
+
+
+def test_shipped_batch_example_is_scored_in_order(served):
+    body = json.loads((REPO / "examples/predict-batch.json").read_text())
+    predictions = served.post("/predict", json=body).json()["predictions"]
+    assert len(predictions) == len(body["instances"])

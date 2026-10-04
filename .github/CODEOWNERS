@@ -34,6 +34,8 @@
 /requirements/worker.in @uzuz3737 @OuanEng @pairot230 @thanachaithongbai-hue
 /requirements/worker.lock @uzuz3737 @OuanEng @pairot230 @thanachaithongbai-hue
 /examples/predict.json @thanachaithongbai-hue
+/examples/predict-batch.json @thanachaithongbai-hue
+/examples/invalid/ @thanachaithongbai-hue
 /requirements/serving.lock @thanachaithongbai-hue
 /requirements/serving.in @thanachaithongbai-hue
 /requirements/api.in @uzuz3737 @thanachaithongbai-hue
