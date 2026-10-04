@@ -1,6 +1,6 @@
 # Getting started
 
-**P0 integration code exists; the complete credit-default system is pending P1–P3 adapters.** Host checks cover framework behavior. Docker was unavailable on the implementation host, so container instructions require a real Docker-machine run before claiming runtime acceptance. See [P0 handoff](P0_HANDOFF.md) and [named assignments](TEAM_WORK.md).
+**All P0–P3 components exist and the full lifecycle has run in Docker** (see [evidence index](evidence/INDEX.md)). The short version of this guide is the Quick start in the [README](../README.md). See [P0 handoff](P0_HANDOFF.md) and [named assignments](TEAM_WORK.md).
 
 ## Clone and contribute
 
@@ -28,7 +28,7 @@ python scripts/check_docs.py
 python -m mlops_project.pipelines.preflight --config configs/project.yaml --project-root .
 ```
 
-Ruff, pytest and the docs checker should pass. **Preflight should fail in the initial checkout** with missing adapters/unconfigured numerical gates. This protects the runtime from reporting an incomplete project as a successful pipeline. Tests use isolated fixtures; they do not acquire UCI data or train real models.
+Ruff, pytest and the docs checker should pass, and preflight should now report every adapter and gate as present. It still fails closed if an adapter is removed or a gate is unset. For the full model/serving test suite install `src/mlops_project/training/requirements-dev.lock` and `requirements/serving.lock` instead (see the README).
 
 On Bash, set `PYTHONPATH=src` before a direct module invocation. Pytest obtains `src` through `pyproject.toml` configuration. Keep `.venv`, data, artifacts, secrets and caches ignored.
 
@@ -100,7 +100,7 @@ curl.exe http://localhost:8000/ready
 docker compose --profile application down
 ```
 
-P3 adds a schema-valid prediction example and records the tested POST response once FastAPI exists. Preserve real logs/manifests in a sanitized evidence record before cleanup; `down` stops services without requesting volume deletion.
+Request examples are in `examples/` (normal) and `examples/invalid/` (each returns 422); see [Serving and monitoring](SERVING.md). Preserve real logs/manifests in a sanitized evidence record before cleanup; `down` stops services without requesting volume deletion.
 
 ## Controlled rollback
 
@@ -110,7 +110,7 @@ After P2's finalization callback and P3's watcher/API are implemented, P0 can re
 docker compose exec -T pipeline-worker python -m mlops_project.pipelines.deployment --rollback --config configs/project.yaml --reason "demo rollback"
 ```
 
-The CLI uses the stored approved previous model, writes a new desired manifest, verifies ACK/readiness/prediction, finalizes registry metadata, and preserves an audit record. It does not retrain. Read [Rollback/recovery](TESTING_AND_DEMO.md) and [P0 deployment handoff](P0_HANDOFF.md) before exercising it. The current checkout lacks the real API and callback required for this command to succeed.
+The CLI uses the stored approved previous model, writes a new desired manifest, verifies ACK/readiness/prediction, finalizes registry metadata, and preserves an audit record. It does not retrain. Read [Rollback/recovery](TESTING_AND_DEMO.md) and [P0 deployment handoff](P0_HANDOFF.md) before exercising it. It needs a current and a previous confirmed deployment, i.e. at least two successful full runs.
 
 ## Checks and troubleshooting
 
