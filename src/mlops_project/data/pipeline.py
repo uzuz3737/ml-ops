@@ -283,6 +283,53 @@ def _save_splits(context, source, parts, strategy):
     return {**manifest, "split_manifest": ref, "artifacts": [*artifacts, ref]}
 
 
+def _training_manifest(context, source):
+    """Split manifest in the shape P2's training.inputs.load_inputs reads.
+
+    Partitions are written as CSV with project-relative URIs; monitoring rows are
+    never written here, only listed as protected IDs together with final test.
+    """
+    root = Path(context["project_root"]).resolve()
+    run = Path(context["run_dir"]).resolve()
+    if not run.is_relative_to(root):
+        raise PipelineError("path_outside_root", "run_dir must be inside the project root.")
+    partitions, refs = {}, []
+    for name in ("train", "validation", "final_test"):
+        if name not in source["partitions"]:
+            continue  # approved retraining snapshots only carry train/validation
+        frame = _read(context, source["partitions"][name]["data"])
+        path = run / f"{name}.csv"
+        frame[["ID", *FEATURES, TARGET]].to_csv(path, index=False)
+        partitions[name] = {
+            "uri": path.relative_to(root).as_posix(),
+            "sha256": sha256_file(path),
+            "format": "csv",
+        }
+        refs.append(_ref(path))
+    protected = []
+    for name in ("final_test", "monitoring"):
+        if name in source["partitions"]:
+            ids_path = run / source["partitions"][name]["ids"]["uri"]
+            protected.extend(json.loads(ids_path.read_text(encoding="utf-8")))
+    manifest = {
+        "contract_version": 1,
+        "dataset_version": source["dataset_version"],
+        "schema_version": source["schema_version"],
+        "validation_id": partitions["validation"]["sha256"],
+        "feature_columns": list(FEATURES),
+        "target_column": TARGET,
+        "identifier": "ID",
+        "partitions": partitions,
+        "protected_ids": sorted(protected),
+    }
+    if context.get("retraining"):
+        manifest["final_test_excluded"] = True
+    path = run / "training-split-manifest.json"
+    refs.append(_write(context, path.name, manifest))
+    portable = {"uri": path.relative_to(root).as_posix(), "sha256": sha256_file(path)}
+    return portable, refs
+
+
 def features(context):
     import joblib
 
@@ -293,12 +340,16 @@ def features(context):
     transformer = build_transformer().fit(train[list(FEATURES)])
     path = Path(context["run_dir"]) / "transformer.joblib"
     joblib.dump(transformer, path)
+    training_manifest, refs = _training_manifest(context, source)
     return {
         **source,
         **_base(context),
+        "data_split_manifest": source["split_manifest"],
+        "split_manifest": training_manifest,
+        "preprocessor_factory": "mlops_project.features:build_preprocessor",
         "transformer": _ref(path),
         "feature_order": list(FEATURES),
         "fit_partition": "train",
         "output_features": transformer.get_feature_names_out().tolist(),
-        "artifacts": [*source["artifacts"], _ref(path)],
+        "artifacts": [*source["artifacts"], _ref(path), *refs],
     }
