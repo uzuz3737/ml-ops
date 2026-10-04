@@ -1,7 +1,9 @@
 """Prediction events and delayed labels, appended as JSON lines.
 
-P1 reads predictions.jsonl for feature drift; P2 joins labels.jsonl on
-(request_id, instance_index) for labeled quality. The in-memory index is
+P1 reads predictions.jsonl for feature drift. Both files feed P2's
+monitoring.quality.join_labels as-is: prediction events carry
+prediction_time, and labels.jsonl holds feedback envelopes
+({request_id, labels: [{instance_index, label}], observed_at}). The in-memory index is
 rebuilt from the files on startup so feedback still works after a restart.
 """
 
@@ -54,8 +56,9 @@ class EventStore:
                 event["request_id"], {"count": 0, "model_version": event["model_version"]}
             )
             entry["count"] = max(entry["count"], event["instance_index"] + 1)
-        for event in _read_lines(self._labels_path):
-            self._labels[(event["request_id"], event["instance_index"])] = event["label"]
+        for envelope in _read_lines(self._labels_path):
+            for item in envelope["labels"]:
+                self._labels[(envelope["request_id"], item["instance_index"])] = item["label"]
 
     @property
     def enabled(self) -> bool:
@@ -70,13 +73,13 @@ class EventStore:
     def record_predictions(self, request_id, model, instances, predictions) -> None:
         if not self.enabled:
             return
-        predicted_at = _now()
+        prediction_time = _now()
         records = [
             {
                 "contract_version": 1,
                 "request_id": request_id,
                 "instance_index": index,
-                "predicted_at": predicted_at,
+                "prediction_time": prediction_time,
                 "model_version": model.model_version,
                 "schema_version": model.schema_version,
                 "features": instance,
@@ -135,21 +138,17 @@ class EventStore:
                     raise FeedbackError(409, "label_conflict", "A different label already exists.")
                 if previous is None:
                     pending[index] = label
-            received_at = _now()
-            new = [
-                {
+            if pending:
+                # only labels not seen before, so replays never duplicate rows
+                envelope = {
                     "contract_version": 1,
                     "request_id": request_id,
-                    "instance_index": index,
-                    "label": label,
-                    "model_version": known["model_version"],
+                    "labels": [{"instance_index": i, "label": v} for i, v in pending.items()],
                     "observed_at": observed_at,
-                    "received_at": received_at,
+                    "received_at": _now(),
+                    "model_version": known["model_version"],
                 }
-                for index, label in pending.items()
-            ]
-            if new:
-                self._append(self._labels_path, new)
-                for record in new:
-                    self._labels[(request_id, record["instance_index"])] = record["label"]
-            return len(new)
+                self._append(self._labels_path, [envelope])
+                for index, label in pending.items():
+                    self._labels[(request_id, index)] = label
+            return len(pending)

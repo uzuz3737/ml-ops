@@ -184,3 +184,25 @@ def test_metrics_expose_request_counters(served):
     assert 'api_validation_failures_total{rule="envelope"}' in text
     assert "model_ready 1.0" in text
     assert "request_id" not in text
+
+
+def test_event_files_match_p2_label_join_format(served, settings):
+    request_id = served.post("/predict", json={"instances": [_instance()] * 2}).json()["request_id"]
+    served.post(
+        "/feedback",
+        json={
+            "request_id": request_id,
+            "labels": [{"instance_index": 1, "label": 1}],
+            "observed_at": "2099-01-01T00:00:00Z",
+        },
+    )
+    prediction = json.loads((settings.events_dir / "predictions.jsonl").read_text().splitlines()[0])
+    feedback = json.loads((settings.events_dir / "labels.jsonl").read_text().splitlines()[0])
+
+    # fields read by monitoring.quality.join_labels
+    for key in ("request_id", "instance_index", "prediction_time", "model_version", "label",
+                "default_probability"):  # fmt: skip
+        assert key in prediction
+    assert feedback["request_id"] == request_id
+    assert feedback["labels"] == [{"instance_index": 1, "label": 1}]
+    assert feedback["observed_at"] == "2099-01-01T00:00:00Z"
