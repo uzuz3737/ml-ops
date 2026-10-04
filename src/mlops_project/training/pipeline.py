@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 from mlops_project.pipelines.contracts import confined_path, sha256_file
-from mlops_project.pipelines.runner import atomic_json
+from mlops_project.pipelines.runner import atomic_json, file_lock
 from mlops_project.training.bundle import environment, load_bundle, probabilities
 from mlops_project.training.inputs import load_inputs, shared_preprocessor, verified_path
 from mlops_project.training.metrics import classification_metrics, select_threshold
@@ -126,9 +126,19 @@ def _train(context, stage):
         },
     )
     mlflow.set_tracking_uri(tracking_uri(context))
-    mlflow.set_experiment(
-        context["config"].get("training", {}).get("experiment_name", "credit-default")
-    )
+    experiment_name = context["config"].get("training", {}).get("experiment_name", "credit-default")
+    client = mlflow.MlflowClient()
+    existing = client.get_experiment_by_name(experiment_name)
+    if existing is None:
+        artifact_location = None
+        if tracking_uri(context).startswith("sqlite:"):
+            artifact_location = (root / "artifacts/mlflow").resolve().as_uri()
+        experiment_id = client.create_experiment(
+            experiment_name, artifact_location=artifact_location
+        )
+    else:
+        experiment_id = existing.experiment_id
+    mlflow.set_experiment(experiment_id=experiment_id)
     with mlflow.start_run(run_name=f"{context['run_id']}-{stage}") as run:
         mlflow.set_tags(
             {
@@ -293,4 +303,103 @@ def evaluate(context):
             str(result["experiment_id"] == selected["experiment_id"]).lower(),
         )
     client.log_artifact(selected["mlflow_run_id"], str(path), "evaluation")
+    return report
+
+
+def evaluate_final_test(context, selected, *, locked_candidate_sha256):
+    """One locked initial-candidate assessment; never used by selection/gates/retraining."""
+    import pandas as pd
+
+    if context.get("retraining") or context["run_id"].startswith("retrain-"):
+        raise ValueError("Protected final test is forbidden for retraining")
+    if selected.get("passed") is not True or locked_candidate_sha256 != selected["artifact_sha256"]:
+        raise ValueError("Explicitly lock the evaluated candidate before final-test assessment")
+    root = Path(context["project_root"])
+    source = {"split_manifest": selected["split_manifest"]}
+    _, manifest, splits = load_inputs({**context, "inputs": {"features": source}})
+    reference = manifest["partitions"]["final_test"]
+    path = verified_path(reference, root)
+    identity = {
+        "dataset_version": manifest["dataset_version"],
+        "split_manifest_sha256": selected["split_manifest_sha256"],
+        "artifact_sha256": locked_candidate_sha256,
+        "final_test_sha256": reference["sha256"],
+    }
+    import hashlib
+
+    ledger_id = hashlib.sha256(manifest["dataset_version"].encode()).hexdigest()
+    ledger_dir = root / "artifacts/final-test"
+    ledger_dir.mkdir(parents=True, exist_ok=True)
+    ledger = ledger_dir / f"{ledger_id}.json"
+    with file_lock(ledger_dir / f".{ledger_id}.lock"):
+        if ledger.exists():
+            previous = json.loads(ledger.read_text(encoding="utf-8"))
+            if previous["identity"] != identity:
+                raise ValueError(
+                    "Final test was already consumed by a different locked candidate/split"
+                )
+            if previous["state"] != "completed":
+                raise ValueError(
+                    "Final-test assessment interrupted; inspect preserved evidence before recovery"
+                )
+            return previous["report"]
+        bundle = load_bundle(
+            verified_path(
+                {"uri": selected["artifact_uri"], "sha256": locked_candidate_sha256}, root
+            ),
+            locked_candidate_sha256,
+            manifest["schema_version"],
+        )
+        # Record lock before touching held-out labels; a crash cannot permit a new candidate.
+        for key in (
+            "split_manifest_sha256",
+            "run_id",
+            "dataset_version",
+            "schema_version",
+            "code_commit",
+            "config_sha256",
+        ):
+            if bundle["manifest"][key] != selected[key]:
+                raise ValueError("Locked candidate provenance differs from final assessment")
+        atomic_json(ledger, {"identity": identity, "state": "locked"})
+        if reference["format"] == "csv":
+            rows = pd.read_csv(path)
+        elif reference["format"] == "parquet":
+            rows = pd.read_parquet(path)
+        else:
+            raise ValueError("Unsupported final-test format")
+        features, target, identifier = (
+            manifest["feature_columns"],
+            manifest["target_column"],
+            manifest["identifier"],
+        )
+        if set(rows.columns) != set(features + [target, identifier]) or rows.isna().any().any():
+            raise ValueError("Invalid final-test columns/nulls")
+        ids = set(rows[identifier].astype(str))
+        used = set(splits["train"][identifier].astype(str)) | set(
+            splits["validation"][identifier].astype(str)
+        )
+        if (
+            rows[identifier].duplicated().any()
+            or ids & used
+            or not ids <= {str(v) for v in manifest["protected_ids"]}
+        ):
+            raise ValueError("Final-test IDs are not protected/disjoint")
+        report = {
+            "contract_version": 1,
+            "purpose": "locked-initial-candidate-final-assessment",
+            "run_id": context["run_id"],
+            **identity,
+            "metrics": classification_metrics(
+                rows[target].to_numpy(),
+                probabilities(bundle["pipeline"], rows[features]),
+                bundle["manifest"]["threshold"],
+            ),
+        }
+        atomic_json(Path(context["run_dir"]) / "final-test.json", report)
+        atomic_json(ledger, {"identity": identity, "state": "completed", "report": report})
+    mlflow.set_tracking_uri(tracking_uri(context))
+    mlflow.MlflowClient().log_artifact(
+        selected["mlflow_run_id"], str(Path(context["run_dir"]) / "final-test.json"), "final-test"
+    )
     return report

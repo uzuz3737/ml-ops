@@ -24,7 +24,7 @@ def training_context(tmp_path, monkeypatch):
     directory.mkdir(parents=True)
     rng = np.random.default_rng(42)
     frames = {}
-    for name, offset, size in (("train", 0, 180), ("validation", 180, 80)):
+    for name, offset, size in (("train", 0, 180), ("validation", 180, 80), ("final_test", 900, 20)):
         x = rng.normal(size=(size, 3))
         y = (x[:, 0] + 0.4 * x[:, 1] + rng.normal(scale=0.3, size=size) > 0.7).astype(int)
         frame = pd.DataFrame(x, columns=["a", "b", "c"])
@@ -41,7 +41,7 @@ def training_context(tmp_path, monkeypatch):
         "target_column": "target",
         "identifier": "ID",
         "partitions": frames,
-        "protected_ids": [900, 901],
+        "protected_ids": list(range(900, 920)),
     }
     atomic_json(root / "split.json", manifest)
     lock = Path(__file__).resolve().parents[2] / "src/mlops_project/training/requirements.lock"
