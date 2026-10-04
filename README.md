@@ -50,6 +50,7 @@ See [Team work](docs/TEAM_WORK.md) for file ownership, handoffs, review pairs an
 | [Interface contracts](docs/INTERFACE_CONTRACTS.md) | What data, artifacts, API responses and deployment events must components exchange? |
 | [Requirements](docs/REQUIREMENTS.md) | Which course requirement does each implementation and piece of evidence satisfy? |
 | [Testing and demo](docs/TESTING_AND_DEMO.md) | How will we prove normal behavior, failures, drift, retraining and rollback? |
+| [Serving and monitoring](docs/SERVING.md) | How do I call the API, what does it reject, how fast is it, and how are drift/quality alerts raised? |
 | [Report template](docs/REPORT_TEMPLATE.md) | What should we submit and explain, including AI assistance and individual contributions? |
 
 ## Selected stack
