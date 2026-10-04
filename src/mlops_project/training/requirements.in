@@ -1,8 +1,8 @@
-# P2-only runtime. P1/P0 coordinate the shared Linux worker lock separately.
+# P2 runtime. sklearn/pandas/numpy match P1 (TFDV 1.16 needs pandas<2) so bundles load in serving.
 mlflow==2.19.0
-scikit-learn==1.5.2
+scikit-learn==1.6.1
 numpy==1.26.4
-pandas==2.2.3
+pandas==1.5.3
 joblib==1.4.2
 PyYAML==6.0.2
 sqlalchemy==2.0.37
