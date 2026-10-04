@@ -53,7 +53,12 @@ class EventStore:
         self._labels_path = directory / "labels.jsonl"
         for event in _read_lines(self._predictions_path):
             entry = self._requests.setdefault(
-                event["request_id"], {"count": 0, "model_version": event["model_version"]}
+                event["request_id"],
+                {
+                    "count": 0,
+                    "model_version": event["model_version"],
+                    "prediction_time": event["prediction_time"],
+                },
             )
             entry["count"] = max(entry["count"], event["instance_index"] + 1)
         for envelope in _read_lines(self._labels_path):
@@ -93,6 +98,7 @@ class EventStore:
             self._requests[request_id] = {
                 "count": len(instances),
                 "model_version": model.model_version,
+                "prediction_time": prediction_time,
             }
 
     def record_feedback(self, body) -> int:
@@ -122,6 +128,10 @@ class EventStore:
             known = self._requests.get(request_id)
             if known is None:
                 raise FeedbackError(404, "unknown_request", "No retained prediction has this ID.")
+            predicted = datetime.fromisoformat(known["prediction_time"].replace("Z", "+00:00"))
+            if observed < predicted:
+                # P2's label join rejects outcomes observed before the prediction
+                raise FeedbackError(422, "observed_before_prediction", "observed_at is too early.")
             pending: dict[int, int] = {}
             for item in labels:
                 if not isinstance(item, dict) or set(item) != {"instance_index", "label"}:

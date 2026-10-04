@@ -138,7 +138,7 @@ def test_feedback_flow(served):
     label = {
         "request_id": request_id,
         "labels": [{"instance_index": 0, "label": 1}],
-        "observed_at": "2026-10-04T00:00:00Z",
+        "observed_at": "2099-01-01T00:00:00Z",
     }
 
     first = served.post("/feedback", json=label)
@@ -163,6 +163,11 @@ def test_feedback_flow(served):
     no_tz = label | {"observed_at": "2026-10-04T00:00:00"}
     assert served.post("/feedback", json=no_tz).status_code == 422
 
+    too_early = label | {"observed_at": "2000-01-01T00:00:00Z"}
+    assert served.post("/feedback", json=too_early).json()["error"]["code"] == (
+        "observed_before_prediction"
+    )
+
 
 def test_feedback_survives_restart(settings, tmp_path):
     request_deploy(settings, publish_bundle(tmp_path, "7"))
@@ -175,7 +180,7 @@ def test_feedback_survives_restart(settings, tmp_path):
             json={
                 "request_id": request_id,
                 "labels": [{"instance_index": 0, "label": 0}],
-                "observed_at": "2026-10-04T00:00:00Z",
+                "observed_at": "2099-01-01T00:00:00Z",
             },
         )
     assert response.status_code == 202
