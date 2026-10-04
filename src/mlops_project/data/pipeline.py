@@ -48,11 +48,7 @@ def ingest(context):
     run = Path(context["run_dir"])
     archive = run / "source.zip"
     if context.get("retraining"):
-        # Approved new-snapshot ingestion needs a separate versioned source adapter.
-        raise PipelineError(
-            "unsupported_retraining_source",
-            "P1 UCI adapter cannot reuse historical data as a new retraining snapshot.",
-        )
+        return _ingest_snapshot(context)
     local = context["config"]["dataset"].get("source_archive")
     if local:
         shutil.copyfile(
@@ -109,6 +105,32 @@ def ingest(context):
     }
     manifest = _write(context, "dataset-manifest.json", result)
     result["artifacts"].append(manifest)
+    return result
+
+
+def _ingest_snapshot(context):
+    from mlops_project.data.snapshots import load_snapshot
+
+    frame, partitions, provenance = load_snapshot(context)
+    path = Path(context["run_dir"]) / "data.json"
+    frame.to_json(path, orient="records")
+    result = {
+        **_base(context),
+        "dataset_version": context["retraining"]["candidate_dataset_version"],
+        "schema_version": "credit-default-v1",
+        "content_sha256": sha256_file(path),
+        "data": _ref(path),
+        "row_count": len(frame),
+        "feature_columns": list(FEATURES),
+        "target_column": TARGET,
+        "approved_partitions": partitions,
+        "snapshot_provenance": provenance,
+        **{key: provenance[key] for key in ("source", "license", "attribution")},
+        "receipt_sha256": context["retraining"].get("receipt_sha256"),
+        "created_at": datetime.now(UTC).isoformat(),
+        "artifacts": [_ref(path)],
+    }
+    result["artifacts"].append(_write(context, "dataset-manifest.json", result))
     return result
 
 
@@ -169,7 +191,7 @@ def validate(context):
         raise PipelineError(
             "data_validation_failed", "Hard data validation failed; report and alert persisted."
         )
-    return {**report, "data": source["data"], "artifacts": artifacts}
+    return {**source, **report, "data": source["data"], "artifacts": artifacts}
 
 
 def split(context):
@@ -187,6 +209,18 @@ def split(context):
     ):
         raise PipelineError("unsupported_split", "This split contract requires 60/20/10/10.")
     seed = config["project"]["seed"]
+    if "approved_partitions" in source:
+        approved = source["approved_partitions"]
+        if not context.get("retraining") or set(approved) != {"train", "validation"}:
+            raise PipelineError(
+                "invalid_snapshot", "Approved partitions require controlled retraining."
+            )
+        parts = [(name, frame[frame.ID.isin(ids)]) for name, ids in approved.items()]
+        if sum(len(part) for _, part in parts) != len(frame) or set(approved["train"]) & set(
+            approved["validation"]
+        ):
+            raise PipelineError("snapshot_leakage", "Snapshot partition membership changed.")
+        return _save_splits(context, source, parts, "approved-independent-snapshot")
     train, remaining = train_test_split(
         frame, train_size=0.6, random_state=seed, stratify=frame[TARGET]
     )
@@ -196,13 +230,22 @@ def split(context):
     final_test, monitoring = train_test_split(
         remaining, train_size=0.5, random_state=seed, stratify=remaining[TARGET]
     )
+    return _save_splits(
+        context,
+        source,
+        (
+            ("train", train),
+            ("validation", validation),
+            ("final_test", final_test),
+            ("monitoring", monitoring),
+        ),
+        "stratified-client-disjoint",
+    )
+
+
+def _save_splits(context, source, parts, strategy):
     partitions, artifacts = {}, list(source["artifacts"])
-    for name, part in (
-        ("train", train),
-        ("validation", validation),
-        ("final_test", final_test),
-        ("monitoring", monitoring),
-    ):
+    for name, part in parts:
         part = part.sort_values("ID")
         path = Path(context["run_dir"]) / f"{name}.json"
         part.to_json(path, orient="records")
@@ -218,8 +261,8 @@ def split(context):
         **_base(context),
         "dataset_version": source["dataset_version"],
         "schema_version": source["schema_version"],
-        "seed": seed,
-        "strategy": "stratified-client-disjoint",
+        "seed": context["config"]["project"]["seed"],
+        "strategy": strategy,
         "partitions": partitions,
     }
     ref = _write(context, "split-manifest.json", manifest)

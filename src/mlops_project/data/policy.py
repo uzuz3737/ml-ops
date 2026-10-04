@@ -32,13 +32,18 @@ def validate_rows(records, *, training=True):
     """Reject coercions, nulls and invalid domains; report safe row positions only."""
     required = set(FEATURES) | ({"ID", TARGET} if training else set())
     failures, ids = [], set()
+    if not isinstance(records, list):
+        return [{"rule": "records_must_be_list"}]
     for index, row in enumerate(records):
-        if set(row) != required:
+        if not isinstance(row, dict) or set(row) != required:
             failures.append({"row": index, "rule": "columns"})
             continue
         for name, value in row.items():
             valid = isinstance(value, Real) and not isinstance(value, bool)
-            valid = valid and math.isfinite(value) and value == int(value)
+            try:
+                valid = valid and math.isfinite(value) and value == int(value)
+            except (OverflowError, ValueError):
+                valid = False
             if valid and name in DOMAINS:
                 valid = value in DOMAINS[name]
             if valid and name in {"ID", "AGE", "LIMIT_BAL"}:
@@ -47,7 +52,7 @@ def validate_rows(records, *, training=True):
                 valid = value >= 0
             if not valid:
                 failures.append({"row": index, "field": name, "rule": "type_or_domain"})
-        if training:
+        if training and isinstance(row["ID"], Real) and not isinstance(row["ID"], bool):
             if row["ID"] in ids:
                 failures.append({"row": index, "field": "ID", "rule": "duplicate"})
             ids.add(row["ID"])

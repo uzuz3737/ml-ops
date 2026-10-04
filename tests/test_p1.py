@@ -162,3 +162,89 @@ def test_real_uci_stages(tmp_path):
     assert [p["row_count"] for p in partitioned["partitions"].values()] == [18000, 6000, 3000, 3000]
     ctx["inputs"] = {"split": partitioned}
     assert pipeline.features(ctx)["fit_partition"] == "train"
+
+
+def snapshot_context(tmp_path):
+    ctx = context(tmp_path)
+    ctx["project_root"] = str(tmp_path)
+    data = rows()
+    refs = {}
+    for name, records in (
+        ("train", data[:240]),
+        ("validation", data[240:320]),
+        ("protected", [r["ID"] for r in data[320:]]),
+    ):
+        path = tmp_path / f"source-{name}.json"
+        path.write_text(json.dumps(records))
+        refs[name] = pipeline._ref(path)
+    manifest = {
+        "contract_version": 1,
+        "dataset_version": "regime-v2",
+        "schema_version": "credit-default-v1",
+        "source": "synthetic test fixture",
+        "license": "test-only",
+        "attribution": "P1 test generator",
+        "partitions": {k: refs[k] for k in ("train", "validation")},
+        "protected_ids": refs["protected"],
+    }
+    path = tmp_path / "snapshot.json"
+    path.write_text(json.dumps(manifest))
+    ctx["config"]["dataset"] = {"retraining_snapshots": {"regime-v2": pipeline._ref(path)}}
+    ctx["retraining"] = {
+        "candidate_dataset_version": "regime-v2",
+        "candidate_dataset_approved": True,
+        "labels_validated": True,
+        "separate_training_validation": True,
+        "final_test_excluded": True,
+    }
+    return ctx
+
+
+def test_approved_snapshot_preserves_partitions(tmp_path):
+    ctx = snapshot_context(tmp_path)
+    result = pipeline.ingest(ctx)
+    assert result["dataset_version"] == "regime-v2"
+    assert result["row_count"] == 320
+    ctx["inputs"] = {"validate": {**result, "passed": True}}
+    split_result = pipeline.split(ctx)
+    assert set(split_result["partitions"]) == {"train", "validation"}
+    assert [p["row_count"] for p in split_result["partitions"].values()] == [240, 80]
+    assert split_result["strategy"] == "approved-independent-snapshot"
+
+
+@pytest.mark.parametrize(
+    "fault", ["unapproved", "unknown_version", "checksum", "leakage", "invalid_rows"]
+)
+def test_snapshot_rejects_unapproved_changed_or_leaking_data(tmp_path, fault):
+    ctx = snapshot_context(tmp_path)
+    if fault == "unapproved":
+        ctx["retraining"]["labels_validated"] = False
+    elif fault == "unknown_version":
+        ctx["retraining"]["candidate_dataset_version"] = "missing"
+    else:
+        path = tmp_path / "source-train.json"
+        data = json.loads(path.read_text())
+        if fault == "leakage":
+            data[0]["ID"] = 400
+        elif fault == "invalid_rows":
+            data[0]["AGE"] = "21"
+        else:
+            data[0]["AGE"] = 22
+        path.write_text(json.dumps(data))
+        if fault != "checksum":
+            manifest_path = tmp_path / "snapshot.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["partitions"]["train"] = pipeline._ref(path)
+            manifest_path.write_text(json.dumps(manifest))
+            ctx["config"]["dataset"]["retraining_snapshots"]["regime-v2"] = pipeline._ref(
+                manifest_path
+            )
+    with pytest.raises(PipelineError):
+        pipeline.ingest(ctx)
+
+
+@pytest.mark.parametrize(
+    "record", [None, [], {"ID": []}, {**rows()[0], "ID": []}, {**rows()[0], "AGE": 10**1000}]
+)
+def test_malformed_records_fail_without_validator_crash(record):
+    assert validate_rows([record])
