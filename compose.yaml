@@ -1,0 +1,214 @@
+name: credit-default-mlops
+
+x-project-volumes: &project-volumes
+  - ./src:/workspace/src:ro
+  - ./configs:/workspace/configs:ro
+  - ./schemas:/workspace/schemas:ro
+  - ./scripts:/workspace/scripts:ro
+  - ./examples:/workspace/examples:ro
+  - ./data:/workspace/data
+  - ./artifacts:/workspace/artifacts
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: docker/airflow.Dockerfile
+  image: credit-default-airflow:2.10.5-python3.11
+  user: "${AIRFLOW_UID:-50000}:0"
+  environment: &airflow-environment
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    PYTHONPATH: /workspace/src
+    MLOPS_WORKER_URL: http://pipeline-worker:8100
+    MLOPS_STEP_TIMEOUT_SECONDS: "${MLOPS_STEP_TIMEOUT_SECONDS:-1910}"
+  volumes:
+    - ./dags:/opt/airflow/dags:ro
+    - ./src:/workspace/src:ro
+    - airflow-logs:/opt/airflow/logs
+  depends_on: &airflow-dependencies
+    postgres:
+      condition: service_healthy
+    airflow-init:
+      condition: service_completed_successfully
+    pipeline-worker:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16.6-bookworm
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?Set POSTGRES_USER in .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+      POSTGRES_DB: "${POSTGRES_DB:?Set POSTGRES_DB in .env}"
+    volumes:
+      - airflow-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.19.0
+    entrypoint: [mlflow]
+    command: [server, --host, 0.0.0.0, --port, "5000", --backend-store-uri, "sqlite:////mlflow/mlflow.db", --serve-artifacts, --artifacts-destination, /mlflow/artifacts]
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - mlflow-store:/mlflow
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  pipeline-worker:
+    build:
+      context: .
+      target: integration
+      args:
+        EXTRA_REQUIREMENTS: "${WORKER_REQUIREMENTS:-}"
+    image: credit-default-integration:local
+    user: "${APP_UID:-1000}:0"
+    working_dir: /workspace
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLOPS_WORKER_URL: http://pipeline-worker:8100
+      MLOPS_STEP_TIMEOUT_SECONDS: "${MLOPS_STEP_TIMEOUT_SECONDS:-1910}"
+      AIRFLOW_URL: http://airflow-webserver:8080
+      AIRFLOW_ADMIN_USERNAME: "${AIRFLOW_ADMIN_USERNAME:?Set AIRFLOW_ADMIN_USERNAME in .env}"
+      AIRFLOW_ADMIN_PASSWORD: "${AIRFLOW_ADMIN_PASSWORD:?Set AIRFLOW_ADMIN_PASSWORD in .env}"
+      API_URL: http://api:8000
+    command: [python, -m, mlops_project.pipelines.worker, --host, 0.0.0.0, --port, "8100", --project-root, /workspace, --config, "${PIPELINE_CONFIG:-configs/project.yaml}"]
+    volumes: *project-volumes
+    expose:
+      - "8100"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=5)"]
+      interval: 5s
+      timeout: 6s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    # Migration has no dependency on itself or the runtime worker.
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *airflow-environment
+      AIRFLOW_ADMIN_USERNAME: "${AIRFLOW_ADMIN_USERNAME:?Set AIRFLOW_ADMIN_USERNAME in .env}"
+      AIRFLOW_ADMIN_PASSWORD: "${AIRFLOW_ADMIN_PASSWORD:?Set AIRFLOW_ADMIN_PASSWORD in .env}"
+    entrypoint: [/bin/bash, /opt/airflow/bootstrap/airflow-init.sh]
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://localhost:8080/health]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://localhost:8974/health]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  api:
+    profiles: [application]
+    build:
+      context: .
+      target: api
+      args:
+        EXTRA_REQUIREMENTS: "${API_REQUIREMENTS:-}"
+    image: credit-default-api:local
+    user: "${APP_UID:-1000}:0"
+    working_dir: /workspace
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLOPS_PROJECT_ROOT: /workspace
+      MLOPS_ARTIFACT_ROOT: /workspace/artifacts
+      MLOPS_CONFIG: /workspace/configs/project.yaml
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes: *project-volumes
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    # Liveness succeeds before a first model; readiness is a deployment gate.
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 5s
+      timeout: 6s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    command: [--config.file=/etc/prometheus/prometheus.yml, --storage.tsdb.path=/prometheus]
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-store:/prometheus
+    healthcheck:
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:9090/-/ready]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:?Set GRAFANA_ADMIN_USER in .env}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-store:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:3000/api/health]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  airflow-db:
+  airflow-logs:
+  mlflow-store:
+  prometheus-store:
+  grafana-store:

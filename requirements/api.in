@@ -1,0 +1,3 @@
+-r runtime.in
+fastapi==0.115.6
+uvicorn==0.34.0

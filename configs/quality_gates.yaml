@@ -1,0 +1,21 @@
+contract_version: 1
+policy_version: credit-default-promotion-v1
+status: pending-baseline
+gates:
+  metric:
+    name: average_precision
+    direction: maximize
+    positive_class: 1
+    # @uzuz3737 and @pairot230 set this from training/validation evidence.
+    minimum: null
+  comparison:
+    # Absolute allowed AP loss against the comparison model on the same population.
+    max_regression: null
+  service:
+    # Provisional team targets; confirm workload/hardware before treating as SLOs.
+    p95_latency_ms_max: 300.0
+    throughput_rps_min: 20.0
+    error_rate_max: 0.01
+    batch_size: 1
+    concurrency: 10
+    measurement_seconds: 300

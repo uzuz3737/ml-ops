@@ -1,0 +1,37 @@
+{
+  "uid": "credit-default-infrastructure",
+  "title": "Credit Default — infrastructure only",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "tags": ["P0", "infrastructure", "awaiting-model-metrics"],
+  "time": {"from": "now-30m", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Prometheus scrape health (1 = up)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"refId": "A", "expr": "up{job=\"prometheus\"}", "instant": true}]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "API scrape health — pending serving component",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"refId": "A", "expr": "up{job=\"credit-default-api\"}", "instant": true}]
+    },
+    {
+      "id": 3,
+      "type": "text",
+      "title": "Component ownership",
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 8},
+      "options": {
+        "mode": "markdown",
+        "content": "This dashboard shows real scrape health only. @OuanEng supplies data-drift statistics; @pairot230 supplies labeled model-quality calculations; @thanachaithongbai-hue supplies API metrics, quality/drift panels and alerts. Missing metrics are not proof of healthy predictions."
+      }
+    }
+  ]
+}
