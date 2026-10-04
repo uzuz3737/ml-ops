@@ -1,0 +1,36 @@
+# Owners are assigned in the order the user supplied their GitHub handles.
+# GitHub review requests require owners to have repository write access.
+# The P0 default covers shared integration, configuration and documentation.
+* @uzuz3737
+
+/src/mlops_project/data/ @OuanEng
+/src/mlops_project/features/ @OuanEng
+/schemas/ @OuanEng
+/configs/data_schema.yaml @OuanEng
+/tests/data/ @OuanEng
+/tests/features/ @OuanEng
+/src/mlops_project/monitoring/feature_drift.py @OuanEng
+/tests/monitoring/test_feature_drift.py @OuanEng
+/requirements/data-model.lock @OuanEng @pairot230
+/requirements/data-model.in @OuanEng @pairot230
+
+/src/mlops_project/training/ @pairot230
+/src/mlops_project/registry/ @pairot230
+/tests/training/ @pairot230
+/tests/registry/ @pairot230
+/src/mlops_project/monitoring/quality.py @pairot230
+/tests/monitoring/test_quality.py @pairot230
+
+/src/mlops_project/serving/ @thanachaithongbai-hue
+/tests/serving/ @thanachaithongbai-hue
+/tests/performance/ @thanachaithongbai-hue
+/docker/serving.Dockerfile @thanachaithongbai-hue
+/infra/prometheus/ @thanachaithongbai-hue
+/infra/grafana/ @thanachaithongbai-hue
+/src/mlops_project/monitoring/exporters.py @thanachaithongbai-hue
+/tests/monitoring/test_exporters.py @thanachaithongbai-hue
+/examples/predict.json @thanachaithongbai-hue
+/requirements/serving.lock @thanachaithongbai-hue
+/requirements/serving.in @thanachaithongbai-hue
+/requirements/api.in @uzuz3737 @thanachaithongbai-hue
+/requirements/api.lock @uzuz3737 @thanachaithongbai-hue
