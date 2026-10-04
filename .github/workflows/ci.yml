@@ -45,7 +45,7 @@ jobs:
             command: pytest tests/test_p1_p2_contract.py
           - name: Serving API, watcher and benchmark
             extra: requirements/serving.lock
-            command: pytest tests/serving tests/monitoring/test_exporters.py
+            command: pytest tests/serving tests/monitoring/test_exporters.py tests/monitoring/test_run.py
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
