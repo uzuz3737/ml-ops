@@ -13,7 +13,13 @@ RUN pip install --no-cache-dir --require-hashes -r /tmp/runtime.lock \
     && useradd --create-home --uid 1000 --gid 0 app
 COPY --chown=app:root . /workspace
 ARG EXTRA_REQUIREMENTS=""
-RUN if [ -n "$EXTRA_REQUIREMENTS" ]; then pip install --no-cache-dir --require-hashes -r "$EXTRA_REQUIREMENTS"; fi \
+RUN if [ -n "$EXTRA_REQUIREMENTS" ]; then \
+        apt-get update \
+        && apt-get install -y --no-install-recommends g++ libstdc++6 \
+        && pip install --no-cache-dir --require-hashes -r "$EXTRA_REQUIREMENTS" \
+        && apt-get purge -y --auto-remove g++ \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi \
     && pip check \
     && mkdir -p /workspace/data /workspace/artifacts \
     && chown app:root /workspace/data /workspace/artifacts \
