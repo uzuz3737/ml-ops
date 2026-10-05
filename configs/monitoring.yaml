@@ -1,5 +1,5 @@
 contract_version: 1
-status: pending-calibration-and-implementation
+status: calibrated-for-demo
 owners:
   data_drift: OuanEng
   labeled_quality: pairot230
@@ -7,15 +7,19 @@ owners:
   retraining_orchestration: uzuz3737
 reference_partition: train
 current_partition: monitoring
-minimum_samples: null
-minimum_labeled_samples: null
-minimum_class_samples: null
-minimum_label_coverage: null
-data_drift_threshold: null
-quality_degradation_threshold: null
+# Window size for both drift and quality; drift threshold was calibrated with it.
+minimum_samples: 500
+minimum_labeled_samples: 400
+minimum_class_samples: 30
+minimum_label_coverage: 0.8
+# P1 calibrate_threshold on UCI train (18,000 rows), 500-row windows, 100 trials, q=0.99, seed 42:
+# 0.06611 (healthy replay max PSI 0.031, LIMIT_BAL x10 shift 8.36).
+data_drift_threshold: 0.0662
+# P2 validation bootstrap 99th percentile 0.113044 + 0.01 margin (training/REPORT.md).
+quality_degradation_threshold: 0.123044
 retraining:
-  enabled: false
+  enabled: true
   dag_id: credit_default_pipeline
-  cooldown_seconds: null
+  cooldown_seconds: 3600
   require_valid_labels: true
   require_separate_training_validation: true

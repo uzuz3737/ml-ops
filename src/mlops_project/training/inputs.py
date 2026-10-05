@@ -85,9 +85,7 @@ def load_inputs(context):
 
 
 def shared_preprocessor(source, manifest):
-    reference = source.get(
-        "preprocessor_factory", "mlops_project.features.pipeline:build_preprocessor"
-    )
+    reference = source.get("preprocessor_factory", "mlops_project.features:build_preprocessor")
     module, separator, name = reference.partition(":")
     if not separator:
         raise ValueError("Preprocessor requires module:function reference")

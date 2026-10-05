@@ -60,7 +60,7 @@ services:
     entrypoint: [mlflow]
     command: [server, --host, 0.0.0.0, --port, "5000", --backend-store-uri, "sqlite:////mlflow/mlflow.db", --serve-artifacts, --artifacts-destination, /mlflow/artifacts]
     ports:
-      - "127.0.0.1:5000:5000"
+      - "127.0.0.1:${MLFLOW_HOST_PORT:-5000}:5000"
     volumes:
       - mlflow-store:/mlflow
     healthcheck:
@@ -84,6 +84,7 @@ services:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLOPS_WORKER_URL: http://pipeline-worker:8100
       MLOPS_STEP_TIMEOUT_SECONDS: "${MLOPS_STEP_TIMEOUT_SECONDS:-1910}"
+      MLOPS_CODE_COMMIT: "${MLOPS_CODE_COMMIT:-}"
       AIRFLOW_URL: http://airflow-webserver:8080
       AIRFLOW_ADMIN_USERNAME: "${AIRFLOW_ADMIN_USERNAME:?Set AIRFLOW_ADMIN_USERNAME in .env}"
       AIRFLOW_ADMIN_PASSWORD: "${AIRFLOW_ADMIN_PASSWORD:?Set AIRFLOW_ADMIN_PASSWORD in .env}"
@@ -175,6 +176,7 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus-store:/prometheus
     healthcheck:
       test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1:9090/-/ready]

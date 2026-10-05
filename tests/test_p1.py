@@ -112,6 +112,7 @@ def test_split_disjoint_reproducible_and_features(tmp_path):
     assert [len(s) for s in sets] == [240, 80, 40, 40]
     assert len(set.union(*sets)) == sum(map(len, sets)) == 400
     ctx["inputs"] = {"split": first}
+    ctx["project_root"] = str(tmp_path)  # features writes project-relative URIs
     assert pipeline.features(ctx)["fit_partition"] == "train"
 
 
@@ -175,6 +176,7 @@ def test_real_uci_stages(tmp_path):
     partitioned = pipeline.split(ctx)
     assert [p["row_count"] for p in partitioned["partitions"].values()] == [18000, 6000, 3000, 3000]
     ctx["inputs"] = {"split": partitioned}
+    ctx["project_root"] = str(tmp_path)  # features writes project-relative URIs
     assert pipeline.features(ctx)["fit_partition"] == "train"
     train = pipeline._read(ctx, partitioned["partitions"]["train"]["data"])
     monitoring = pipeline._read(ctx, partitioned["partitions"]["monitoring"]["data"])
@@ -300,6 +302,7 @@ def test_real_snapshot_validation_when_tfdv_available(tmp_path):
     ctx["inputs"] = {"validate": checked}
     partitions = pipeline.split(ctx)
     ctx["inputs"] = {"split": partitions}
+    ctx["project_root"] = str(tmp_path)  # features writes project-relative URIs
     assert pipeline.features(ctx)["fit_partition"] == "train"
 
 

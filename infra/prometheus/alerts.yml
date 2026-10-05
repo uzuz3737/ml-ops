@@ -1,0 +1,56 @@
+groups:
+  - name: credit-default-serving
+    rules:
+      - alert: ApiDown
+        expr: up{job="credit-default-api"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: Prometheus cannot scrape the prediction API.
+      - alert: ModelNotReady
+        expr: model_ready == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: The API is alive but has no verified model loaded.
+      # Thresholds mirror gates.service in configs/quality_gates.yaml.
+      - alert: PredictErrorRateHigh
+        expr: |
+          sum(rate(api_requests_total{endpoint="/predict",status=~"5.."}[5m]))
+            / clamp_min(sum(rate(api_requests_total{endpoint="/predict"}[5m])), 1e-9) > 0.01
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: More than 1% of /predict requests fail on the server side.
+      - alert: PredictLatencyP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(api_request_duration_seconds_bucket{endpoint="/predict"}[5m]))) > 0.3
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: /predict p95 latency is above the 300 ms SLO.
+      # One alert for a burst of bad input, not one per rejected request.
+      - alert: InvalidInputSpike
+        expr: sum(rate(api_validation_failures_total[5m])) > 1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Clients are sending more than one invalid feature per second.
+      - alert: DeploymentFailed
+        expr: increase(model_deployments_total{result="failed"}[15m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: The API rejected a requested model deployment or rollback.
+  - name: credit-default-monitoring
+    rules:
+      - alert: FeatureDrift
+        expr: data_drift_status{status="alert"} == 1
+        labels: {severity: warning}
+        annotations:
+          summary: P1 feature drift (PSI) exceeded its calibrated threshold.
+      - alert: ModelQualityDegraded
+        expr: model_quality_status{status="alert"} == 1
+        labels: {severity: critical}
+        annotations:
+          summary: P2 labeled quality dropped beyond the calibrated threshold.

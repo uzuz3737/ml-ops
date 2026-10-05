@@ -29,7 +29,13 @@
 /infra/grafana/ @thanachaithongbai-hue
 /src/mlops_project/monitoring/exporters.py @thanachaithongbai-hue
 /tests/monitoring/test_exporters.py @thanachaithongbai-hue
+/src/mlops_project/monitoring/run.py @thanachaithongbai-hue
+/tests/monitoring/test_run.py @thanachaithongbai-hue
+/requirements/worker.in @uzuz3737 @OuanEng @pairot230 @thanachaithongbai-hue
+/requirements/worker.lock @uzuz3737 @OuanEng @pairot230 @thanachaithongbai-hue
 /examples/predict.json @thanachaithongbai-hue
+/examples/predict-batch.json @thanachaithongbai-hue
+/examples/invalid/ @thanachaithongbai-hue
 /requirements/serving.lock @thanachaithongbai-hue
 /requirements/serving.in @thanachaithongbai-hue
 /requirements/api.in @uzuz3737 @thanachaithongbai-hue
