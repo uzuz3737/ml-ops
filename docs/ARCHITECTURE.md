@@ -1,6 +1,6 @@
-# Proposed system architecture
+# System architecture
 
-**Status: P0 integration framework implemented; complete lifecycle pending.** Runner/gates, Airflow DAG, container configuration/wrappers and CI files exist. Data/model/API/quality-monitoring adapters and real container/registry/deployment evidence remain assigned work. [P0 handoff](P0_HANDOFF.md) records the executable boundaries and verification limits; this document retains the target complete architecture.
+Data, training, registry, API, monitoring and orchestration modules are implemented. Keep runtime claims tied to the [evidence index](evidence/INDEX.md); an implemented adapter alone is not acceptance evidence. Use the [team runbook](TEAM_RUNBOOK_TH.md) for current operations and the [Lab conventions](LAB_CONVENTIONS.md) for module boundaries.
 
 The selected task is binary credit-card default prediction using [UCI Default of Credit Card Clients, dataset 350](https://archive.ics.uci.edu/dataset/350/default%2Bof%2Bcredit%2Bcard%2Bclients). UCI lists 30,000 examples, 23 features, no missing values, and a binary target with `1` meaning default and `0` meaning no default. The project is a classroom decision-support prototype; a real stakeholder interview and topic approval still need evidence. See [Project brief](PROJECT_BRIEF.md), [Development plan](DEVELOPMENT_PLAN.md), and [Interface contracts](INTERFACE_CONTRACTS.md) for remaining decisions and the concrete credit-feature schema.
 

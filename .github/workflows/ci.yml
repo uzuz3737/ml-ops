@@ -40,7 +40,7 @@ jobs:
           - name: Model registry lifecycle
             command: pytest tests/registry
           - name: Delayed labels and quality monitoring
-            command: pytest tests/monitoring/test_quality.py
+            command: pytest tests/monitoring/test_quality.py tests/test_retraining_demo.py
           - name: P1 to P2 data contract
             command: pytest tests/test_p1_p2_contract.py
           - name: Serving API, watcher and benchmark
