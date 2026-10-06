@@ -83,7 +83,7 @@ def _estimator(stage, seed):
         return LogisticRegression(C=1.0, class_weight="balanced", max_iter=1500, random_state=seed)
     if stage == "train_candidate_1":
         return RandomForestClassifier(
-            n_estimators=75,
+            n_estimators=30,
             max_depth=10,
             min_samples_leaf=5,
             class_weight="balanced",
