@@ -1,6 +1,6 @@
 # Verification, operations and demonstration
 
-Status: **complete-system acceptance specification; P0 host framework tests pass, real container/ML acceptance remains unverified**. Cases reference [requirement IDs](REQUIREMENTS.md). Fixture tests listed in [P0 handoff](P0_HANDOFF.md) do not establish the integrated outcomes below. Each owner implements meaningful checks for their component and saves actual evidence.
+This is the acceptance specification, not a blanket completion claim. Cases reference [requirement IDs](REQUIREMENTS.md); measured outcomes belong in the [evidence index](evidence/INDEX.md). Use the [team runbook](TEAM_RUNBOOK_TH.md) for current commands. Unit fixtures alone do not establish integrated acceptance.
 
 ## Before running checks
 

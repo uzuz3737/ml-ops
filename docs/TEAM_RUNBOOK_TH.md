@@ -58,6 +58,16 @@ Airflow/Grafana ใช้บัญชีใน `.env` MLflow ใช้ port ท�
 ตรวจ code commit, dataset version, dependency lock, model bundle และ metric ก่อนอนุมัติรุ่น
 อย่าเปลี่ยน alias ใน MLflow เพื่อข้าม deployment gate
 
+เปรียบเทียบ ML กับกฎง่าย `PAY_0 >= 2` บน validation เดียวกัน:
+
+```powershell
+docker compose exec -T pipeline-worker python scripts/compare-simple-rule.py --run-id team-initial-001
+```
+
+ผล `simple-rule-comparison.json` เปรียบเทียบ AP และจำนวน default ที่พบเมื่อกำหนด
+งบตรวจ 20% เท่ากัน ตัวเลขนี้เป็นตัวแทนสำหรับสาธิต ต้องคุยกับ stakeholder
+ก่อนอ้างเป็นคุณค่าหรือผลประหยัดของระบบจริง
+
 ## 3. ข้อมูลและการฝึกใหม่
 
 ข้อมูลเริ่มต้นคือ UCI Default of Credit Card Clients 30,000 ราย
@@ -118,7 +128,9 @@ label ที่ไม่พอจะได้ `insufficient_data` และไ�
 เตรียมข้อมูลจำลองสำหรับ retraining โดยใช้ run ID ของ **initial model ที่กำลังใช้งาน**:
 
 ```powershell
-docker compose run --rm --no-deps -v ./configs:/workspace/configs pipeline-worker python scripts/prepare-retraining-demo.py --source-run team-initial-001 --trigger-id demo-001 --approve-synthetic-demo
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r src/mlops_project/training/requirements-dev.lock -r requirements/serving.lock
+.\.venv\Scripts\python.exe scripts/prepare-retraining-demo.py --source-run team-initial-001 --trigger-id demo-001 --approve-synthetic-demo
 ```
 
 คำสั่งสร้าง snapshot ใหม่จาก train/validation เดิมที่กลับ label

@@ -11,6 +11,7 @@ from pathlib import Path
 import joblib
 import mlflow
 import mlflow.sklearn
+from mlflow.exceptions import MlflowException
 from mlflow.models import infer_signature
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -32,6 +33,22 @@ def tracking_uri(context):
     if not uri:
         raise ValueError("Configure MLFLOW_TRACKING_URI or training.tracking_uri explicitly")
     return uri
+
+
+def _experiment_id(client, name, artifact_location):
+    existing = client.get_experiment_by_name(name)
+    if existing is not None:
+        return existing.experiment_id
+    try:
+        return client.create_experiment(name, artifact_location=artifact_location)
+    except MlflowException as error:
+        # Concurrent Airflow training tasks can race to create the first experiment.
+        if error.error_code != "RESOURCE_ALREADY_EXISTS":
+            raise
+        existing = client.get_experiment_by_name(name)
+        if existing is None:
+            raise
+        return existing.experiment_id
 
 
 def code_commit(root):
@@ -153,16 +170,10 @@ def _train(context, stage):
     mlflow.set_tracking_uri(tracking_uri(context))
     experiment_name = context["config"].get("training", {}).get("experiment_name", "credit-default")
     client = mlflow.MlflowClient()
-    existing = client.get_experiment_by_name(experiment_name)
-    if existing is None:
-        artifact_location = None
-        if tracking_uri(context).startswith("sqlite:"):
-            artifact_location = (root / "artifacts/mlflow").resolve().as_uri()
-        experiment_id = client.create_experiment(
-            experiment_name, artifact_location=artifact_location
-        )
-    else:
-        experiment_id = existing.experiment_id
+    artifact_location = None
+    if tracking_uri(context).startswith("sqlite:"):
+        artifact_location = (root / "artifacts/mlflow").resolve().as_uri()
+    experiment_id = _experiment_id(client, experiment_name, artifact_location)
     mlflow.set_experiment(experiment_id=experiment_id)
     with mlflow.start_run(run_name=f"{context['run_id']}-{stage}") as run:
         mlflow.set_tags(

@@ -1,8 +1,8 @@
-# Proposed interface contracts
+# Interface contracts
 
-**Status: P0 callable-stage/worker contracts are implemented; data/model/API contracts below remain proposed until real friend components are integrated.** Exact executable adapter names, context/results and candidate evidence fields are frozen in [P0 handoff](P0_HANDOFF.md) and `configs/project.yaml`. Freeze the remaining contract revision after UCI profiling and quality/SLO agreement, then change it through review. The selected stack is Docker, TFDV, MLflow tracking/registry, Airflow, FastAPI, Prometheus + Grafana, and GitHub Actions.
+P0–P3 components implement these boundaries. Exact adapter names are in `configs/project.yaml`; executable validation lives in `pipelines/contracts.py`, data policy and API schema. The selected stack is Docker, TFDV, MLflow tracking/registry, Airflow, FastAPI, Prometheus + Grafana, and GitHub Actions. Review coordinated contract changes and retain artifact/version evidence.
 
-See [Architecture](ARCHITECTURE.md), [Development plan](DEVELOPMENT_PLAN.md), and [Team work](TEAM_WORK.md). P0 pipeline modules are available; P1 data/features, P2 training/registry/quality and P3 serving/export modules are pending.
+See [Architecture](ARCHITECTURE.md), [team runbook](TEAM_RUNBOOK_TH.md), and [evidence](evidence/INDEX.md). Stakeholder approval and external course acceptance still require team evidence.
 
 ## Decisions that must precede implementation
 
