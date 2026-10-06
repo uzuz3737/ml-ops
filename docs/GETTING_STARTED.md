@@ -14,7 +14,7 @@ Use your assigned branch suggestion from [Contributing](../CONTRIBUTING.md), you
 
 ## Host development
 
-Python **3.11** is the declared container/CI version. P0 host checks ran on Python **3.12.14**. The hash-pinned `requirements/dev.lock` includes the framework's runtime and development tools; `requirements/runtime.lock` is for the integration worker. Friends pin their own heavier TFDV/model/API dependencies and verify their Linux images.
+Python **3.11** is the declared container/CI version. P0 host checks ran on Python **3.12.14**. The hash-pinned `requirements/dev.lock` includes the framework's runtime and development tools; `requirements/runtime.lock` is for the integration worker. The heavier TFDV/model/API dependencies are pinned in `requirements/worker.lock` and `requirements/serving.lock`.
 
 ```powershell
 python -m venv .venv
@@ -44,7 +44,7 @@ Copy-Item .env.example .env
 docker compose ps
 ```
 
-Infrastructure-only startup starts integration services and omits the API/full DAG. It does not establish valid data, a trained model or successful deployment. Pins include Airflow **2.10.5 / Python 3.11**, MLflow **2.19.0** and Postgres **16.6**. They are configuration choices awaiting build/run verification, rather than a tested TFDV compatibility matrix.
+Infrastructure-only startup starts integration services and omits the API/full DAG. It does not establish valid data, a trained model or successful deployment. Pins include Airflow **2.10.5 / Python 3.11**, MLflow **2.19.0** and Postgres **16.6**. These are the versions the recorded evidence runs used.
 
 After every assigned adapter imports successfully and gates are approved:
 
@@ -69,7 +69,7 @@ src/mlops_project/pipelines/   # P0 runner, worker/client, preflight and retrain
 src/mlops_project/pipelines/gates.py # P0 policy; P2/P3 supply real measurements
 src/mlops_project/pipelines/deployment.py # P0 deployment/rollback controller
 dags/                         # P0 Airflow graph
-configs/                      # Shared versioned config and pending gate values
+configs/                      # Shared versioned config: project, gates, monitoring, schema
 docker/                       # Integration images; P1–P3 extend component images
 compose.yaml                  # Local integration topology
 scripts/                      # Full-run wrappers and documentation checker
@@ -79,7 +79,7 @@ tests/                        # Framework contract/failure tests
 docs/                         # Planning, contracts, status and report template
 ```
 
-P1 creates `data/`, `features/`, schemas and feature-drift modules under the package. P2 creates `training/`, `registry/` and labeled-quality modules. P3 creates `serving/`, performance and metric-export modules. Their directories are ownership boundaries, not proof of existing implementations. Generated data and `artifacts/` outputs are ignored.
+P1 creates `data/`, `features/`, schemas and feature-drift modules under the package. P2 creates `training/`, `registry/` and labeled-quality modules. P3 creates `serving/`, performance and metric-export modules. Each directory is owned by that member (see [CODEOWNERS](../.github/CODEOWNERS)). Generated data and `artifacts/` outputs are ignored.
 
 ## Service addresses and evidence
 
@@ -104,7 +104,7 @@ Request examples are in `examples/` (normal) and `examples/invalid/` (each retur
 
 ## Controlled rollback
 
-After P2's finalization callback and P3's watcher/API are implemented, P0 can restore the previous confirmed healthy deployment:
+Restore the previous confirmed healthy deployment (demonstrated on 4 October 2026, v3 → v2):
 
 ```powershell
 docker compose exec -T pipeline-worker python -m mlops_project.pipelines.deployment --rollback --config configs/project.yaml --reason "demo rollback"
@@ -124,7 +124,7 @@ The CLI uses the stored approved previous model, writes a new desired manifest, 
 | API readiness/version failure | P3 checks desired model, load/ACK and probes; preserve prior serving version |
 | Candidate rejected | Keep current model; inspect actual evaluation and performance gate evidence |
 | Missing quality metrics | Inspect label joins/minimum coverage; report insufficient data |
-| Workflow green but no full run | Framework CI verifies fixtures; dispatch the full lifecycle after adapter handoff |
+| Workflow green but no full run | Framework CI verifies components and fixtures; run `scripts/run-all.sh` (or the manual `full-pipeline.yml` workflow) for the full lifecycle |
 
 Before submission, someone other than P0 follows these docs from a clean Docker clone and records image identity, OS/hardware, source/split/model versions, full-run logs, API request/readiness and dashboard access. Remaining verification is tracked in [Requirements](REQUIREMENTS.md).
 

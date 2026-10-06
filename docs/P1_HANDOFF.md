@@ -1,5 +1,9 @@
 # P1 handoff
 
+> **Status (6 October 2026):** written during development and kept as a record. Everything handed off here has since been delivered; "pending" items below are historical. Current behavior: [README](../README.md); results: [evidence index](evidence/INDEX.md).
+
+> Since this handoff, drift was calibrated (500-row windows, PSI threshold 0.0662) and retraining is enabled; see [`configs/monitoring.yaml`](../configs/monitoring.yaml).
+
 Requirements: D1, D2, D3, D4, feature-data portion of O2, O4 and G4.
 
 The four configured P0 adapters now exist. Artifacts and checksum references stay relative to the current run directory. UCI ingestion verifies the frozen source archive before parsing and normalizes the target. Controlled retraining consumes checksum-pinned approved snapshots; it never substitutes the historical UCI download for a new snapshot.

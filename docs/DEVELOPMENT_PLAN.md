@@ -1,5 +1,7 @@
 # Development plan
 
+> **Status (6 October 2026):** written during development and kept as a record. Everything handed off here has since been delivered; "pending" items below are historical. Current behavior: [README](../README.md); results: [evidence index](evidence/INDEX.md).
+
 This plan follows the supplied course requirements and selected [UCI Default of Credit Card Clients dataset](https://archive.ics.uci.edu/dataset/350). P0's integration framework is now implemented; actual P1–P3 components, container verification and full-course evidence remain open. Real stakeholder, topic approval, business measure, numeric model gates and SLO still need confirmation in [PROJECT_BRIEF.md](PROJECT_BRIEF.md). See [P0 handoff](P0_HANDOFF.md) for current implementation status.
 
 The roster is **P0 @uzuz3737 (you), P1 @OuanEng, P2 @pairot230 and P3 @thanachaithongbai-hue**. The course requires **5–7 members**, so four people need additional members or an instructor-approved exception. See [TEAM_WORK.md](TEAM_WORK.md) for named assignments/reviewers and expansion options.
