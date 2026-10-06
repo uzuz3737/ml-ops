@@ -9,13 +9,13 @@ from pathlib import Path
 from mlflow import MlflowClient
 from mlflow.exceptions import MlflowException
 
+from mlops_project.artifacts import atomic_json, file_lock
 from mlops_project.pipelines.contracts import (
     confined_path,
     json_bytes,
     sha256_file,
     validate_run_id,
 )
-from mlops_project.pipelines.runner import atomic_json, file_lock
 from mlops_project.training.bundle import load_bundle
 from mlops_project.training.inputs import verified_path
 from mlops_project.training.pipeline import tracking_uri

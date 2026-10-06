@@ -21,9 +21,10 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
+from mlops_project.artifacts import atomic_json, read_record, utc_now
+
 from ..data.policy import FEATURES
 from ..pipelines.contracts import PipelineError, confined_path, load_config, project_directory
-from ..pipelines.runner import atomic_json, read_record, utc_now
 from .exporters import publish_feature_drift, publish_quality
 from .feature_drift import feature_drift
 from .quality import evaluate_quality

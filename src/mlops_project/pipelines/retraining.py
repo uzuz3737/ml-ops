@@ -16,6 +16,8 @@ from pathlib import Path
 
 import yaml
 
+from mlops_project.artifacts import atomic_json, file_lock, read_record
+
 from .contracts import (
     CONTRACT_VERSION,
     PipelineError,
@@ -26,7 +28,6 @@ from .contracts import (
     project_directory,
     validate_run_id,
 )
-from .runner import atomic_json, file_lock, read_record
 
 
 class AirflowClient:

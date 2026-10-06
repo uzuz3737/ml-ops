@@ -12,8 +12,9 @@ import re
 import threading
 import time
 
+from mlops_project.artifacts import atomic_json, read_record, utc_now
+
 from ..pipelines.contracts import PipelineError, confined_path, sha256_file, validate_run_id
-from ..pipelines.runner import atomic_json, read_record, utc_now
 from . import telemetry
 from .bundle import ModelSlot, load_model
 from .settings import Settings

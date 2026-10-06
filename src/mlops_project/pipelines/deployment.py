@@ -20,6 +20,8 @@ from uuid import uuid4
 
 import yaml
 
+from mlops_project.artifacts import atomic_json, file_lock, read_record, utc_now
+
 from .contracts import (
     PipelineError,
     configuration_snapshot,
@@ -31,7 +33,7 @@ from .contracts import (
     sha256_file,
     validate_run_id,
 )
-from .runner import _run_adapter, atomic_json, file_lock, read_record, utc_now
+from .runner import _run_adapter
 
 _IDENTITY = (
     "model_name",
