@@ -85,7 +85,7 @@ P1 creates `data/`, `features/`, schemas and feature-drift modules under the pac
 
 | Service | Default host URL | Verification |
 | --- | --- | --- |
-| MLflow | `http://localhost:5000` (or `MLFLOW_HOST_PORT`) | Actual tracking runs/artifacts and registry versions |
+| MLflow | `http://localhost:5050` (or `MLFLOW_HOST_PORT`) | Actual tracking runs/artifacts and registry versions |
 | Airflow | `http://localhost:8080` | Login from `.env`; lifecycle DAG task states and logs |
 | FastAPI (P3/application profile) | `http://localhost:8000` | `/health`, exact-version `/ready`, prediction, metrics and feedback |
 | Prometheus | `http://localhost:9090` | Real serving/quality/drift targets |

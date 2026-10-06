@@ -24,7 +24,7 @@
 - Docker Desktop (Windows ใช้ WSL 2 backend, macOS ได้ทั้ง Intel และ Apple Silicon) หรือ Docker Engine + Compose 2.20 ขึ้นไปบน Linux ใน Docker Desktop → Settings → Resources ให้ **memory อย่างน้อย 8 GB** และพื้นที่ดิสก์ประมาณ 20 GB
 - Git (Windows ใช้ Git for Windows ซึ่งมี Git Bash มาด้วย)
 - อินเทอร์เน็ต สำหรับโหลด image, Python package และชุดข้อมูล UCI (pipeline โหลดเองและตรวจ SHA-256 ทุกครั้ง)
-- port 8000, 8080, 5000, 3000 และ 9090 ต้องว่าง
+- port 8000, 8080, 5050, 3000 และ 9090 ต้องว่าง
 
 ไม่ต้องลงอะไรเพิ่มบนเครื่อง ทั้ง Python, Airflow, MLflow, TFDV และโมเดลรันอยู่ใน container ทั้งหมด
 
@@ -68,7 +68,7 @@ curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json
 | --- | --- | --- |
 | Prediction API | http://localhost:8000/docs | — |
 | Airflow | http://localhost:8080 | `airflow` / `airflow-local-demo` |
-| MLflow | http://localhost:5000 | — |
+| MLflow | http://localhost:5050 | — |
 | Grafana | http://localhost:3000 | `admin` / `grafana-local-demo` |
 | Prometheus | http://localhost:9090 | — |
 
@@ -80,7 +80,7 @@ curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json
 | --- | --- |
 | `Docker is required` หรือ engine ไม่พร้อม | เปิด Docker Desktop แล้วรอจนขึ้นว่า engine running |
 | `Create .env from .env.example …` | ทำข้อ 1 ในโฟลเดอร์โปรเจกต์ |
-| `port is already allocated` | ปิดโปรแกรมที่ใช้ port นั้นอยู่ ถ้าเป็น MLflow ให้ใส่ `MLFLOW_HOST_PORT=5050` ใน `.env` (AirPlay ของ macOS และ Windows บางเครื่องจอง 5000 ไว้) |
+| `port is already allocated` | ปิดโปรแกรมที่ใช้ port นั้นอยู่ ถ้าเป็น MLflow ให้เปลี่ยน `MLFLOW_HOST_PORT` ใน `.env` เป็น port อื่น เช่น 5051 |
 | build หรือ stage ถูก kill (exit code 137) | เพิ่ม memory ให้ Docker Desktop เป็น 8 GB ขึ้นไป |
 | `ingest` ล้มด้วย `source_checksum` หรือ network error | โหลดข้อมูลจาก UCI ไม่สำเร็จ เช็คอินเทอร์เน็ตแล้วรันใหม่ด้วย `--run-id` ใหม่ |
 | `This run ID already belongs to a different configuration` | ใช้ `--run-id` ใหม่ |
@@ -204,7 +204,7 @@ One command runs the whole lifecycle in Docker, orchestrated by Airflow.
 - Docker Desktop (Windows with the WSL 2 backend, or macOS Intel/Apple Silicon), or Docker Engine with Compose 2.20+ on Linux. In Docker Desktop → Settings → Resources allow **at least 8 GB memory** and about 20 GB of disk.
 - Git (on Windows, Git for Windows, which includes Git Bash).
 - Internet access for the images, the Python packages and the UCI dataset, which the pipeline downloads and checks against a fixed SHA-256.
-- Free local ports 8000, 8080, 5000, 3000 and 9090.
+- Free local ports 8000, 8080, 5050, 3000 and 9090.
 
 Nothing else is installed on the host: Python, Airflow, MLflow, TFDV and the models all run in containers.
 
@@ -248,7 +248,7 @@ curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json
 | --- | --- | --- |
 | Prediction API | http://localhost:8000/docs | — |
 | Airflow | http://localhost:8080 | `airflow` / `airflow-local-demo` |
-| MLflow | http://localhost:5000 | — |
+| MLflow | http://localhost:5050 | — |
 | Grafana | http://localhost:3000 | `admin` / `grafana-local-demo` |
 | Prometheus | http://localhost:9090 | — |
 
@@ -260,7 +260,7 @@ Logins come from `.env`.
 | --- | --- |
 | `Docker is required` or the engine is unavailable | Start Docker Desktop and wait until it reports that the engine is running |
 | `Create .env from .env.example …` | Do step 1 in the project folder |
-| `port is already allocated` | Stop the program using that port. For MLflow, set `MLFLOW_HOST_PORT=5050` in `.env` (macOS AirPlay and some Windows setups hold port 5000) |
+| `port is already allocated` | Stop the program using that port. For MLflow, set another `MLFLOW_HOST_PORT` in `.env`, e.g. 5051 |
 | A build or stage is killed (exit code 137) | Give Docker Desktop more memory (8 GB or more) |
 | `ingest` fails with `source_checksum` or a network error | The UCI download failed; check the internet connection and rerun with a new `--run-id` |
 | `This run ID already belongs to a different configuration` | Use a new `--run-id` |

@@ -58,7 +58,7 @@ These tools are the team's selected stack. P0 implemented the runner, gate polic
 | Service | Host port | Internal role | Persistence |
 | --- | --- | --- | --- |
 | `api` | `8000` | Prediction, feedback, health, metrics | Active immutable model bundle; prediction/feedback event storage |
-| `mlflow` | `5000` | Tracking UI/API and model registry | Database-backed metadata store and artifact volume |
+| `mlflow` | `5050` on the host (`5000` inside) | Tracking UI/API and model registry | Database-backed metadata store and artifact volume |
 | `airflow` web/API service | `8080` | Orchestration UI/API for local runs | Metadata database volume |
 | Airflow scheduler and task runner | No inbound host port required | Executes training and monitoring DAGs | Reads data/config; writes run reports and artifacts |
 | `prometheus` | `9090` | Scrapes API and monitoring metrics | Time-series volume |
