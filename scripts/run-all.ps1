@@ -3,7 +3,8 @@ param(
     [string]$Config = 'configs/project.yaml',
     [switch]$InfrastructureOnly,
     [ValidateRange(30, 7200)][int]$TimeoutSeconds = 7200,
-    [string]$RunId = ''
+    [string]$RunId = '',
+    [string]$DataFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,6 +67,7 @@ try {
         '/workspace/scripts/airflow-run.py', '--config', $relativeConfig,
         '--timeout-seconds', $TimeoutSeconds.ToString())
     if ($RunId) { $launchArgs += @('--run-id', $RunId) }
+    if ($DataFile) { $launchArgs += @('--data-file', $DataFile.Replace('\', '/')) }
     Invoke-Docker $launchArgs
 }
 catch {

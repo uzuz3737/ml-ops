@@ -54,3 +54,16 @@ groups:
         labels: {severity: critical}
         annotations:
           summary: P2 labeled quality dropped beyond the calibrated threshold.
+      # The validate stage stopped the pipeline; nothing was trained or deployed.
+      - alert: DataValidationFailed
+        expr: data_validation_status{status="alert"} == 1
+        labels: {severity: critical}
+        annotations:
+          summary: The latest pipeline run was stopped by schema/TFDV data validation (details in artifacts/monitoring/alerts/).
+      # Without this, a dead monitoring job leaves drift/quality looking healthy forever.
+      - alert: MonitoringJobStale
+        expr: time() - monitoring_last_run_timestamp_seconds > 86400
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: No drift/quality monitoring pass in the last 24 hours; dashboard values are stale.

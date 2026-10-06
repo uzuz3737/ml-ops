@@ -18,6 +18,8 @@ ERROR_STATUS = {
     "path_outside_root": 403,
     "config_not_allowed": 403,
     "missing_file": 422,
+    "invalid_data_file": 422,
+    "data_validation_failed": 422,
     "invalid_config": 422,
     "invalid_adapter": 422,
     "stage_busy": 409,
@@ -122,16 +124,20 @@ def make_server(
                     raise PipelineError(
                         "invalid_request", "Request body must contain a valid JSON object."
                     ) from None
-                if not isinstance(payload, dict) or set(payload) != {
-                    "step",
-                    "run_id",
-                    "config_path",
-                }:
+                required = {"step", "run_id", "config_path"}
+                if (
+                    not isinstance(payload, dict)
+                    or not required <= set(payload)
+                    or not set(payload) <= required | {"data_file"}
+                ):
                     raise PipelineError(
-                        "invalid_request", "Request keys must be step, run_id and config_path."
+                        "invalid_request",
+                        "Request keys must be step, run_id, config_path and optional data_file.",
                     )
                 if not isinstance(payload["config_path"], str):
                     raise PipelineError("invalid_request", "config_path must be a string.")
+                if "data_file" in payload and not isinstance(payload["data_file"], str):
+                    raise PipelineError("invalid_request", "data_file must be a string.")
                 config_path = confined_path(payload["config_path"], root)
                 if config_path not in allowed:
                     raise PipelineError(
@@ -143,6 +149,7 @@ def make_server(
                     config_path,
                     artifact_root=artifact_root,
                     project_root=root,
+                    data_file=payload.get("data_file"),
                 )
                 self.respond(200, record)
             except PipelineError as error:

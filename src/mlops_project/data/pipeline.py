@@ -1,10 +1,12 @@
 """P0 callable stages. All downstream references are relative to the current run."""
 
 import json
+import math
 import shutil
 import subprocess
 import urllib.request
 import zipfile
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,6 +18,10 @@ from mlops_project.pipelines.contracts import PipelineError, confined_path, sha2
 
 SOURCE = "https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip"
 SOURCE_SHA256 = "56c885f84457f6680f8438f02bfcdac9579323d8a94465ee5f26e32baa727602"
+# Headers found in copies of UCI 350: the original spreadsheet, the Kaggle CSV
+# (PAY_1, dotted target) and ucimlrepo's generic X1..X23/Y names.
+GENERIC_COLUMNS = {f"X{i}": name for i, name in enumerate(FEATURES, start=1)} | {"Y": TARGET}
+TARGET_ALIASES = {"default payment next month", "default next month"}
 
 
 def _write(context, name, value):
@@ -44,11 +50,153 @@ def _base(context):
     return {"contract_version": 1, "run_id": context["run_id"]}
 
 
+def _publish_validation(context, report, *, alert):
+    """Persist the stop/alert evidence and the status Prometheus reads via the API."""
+    run = Path(context["run_dir"])
+    record = {**report, "event": "data_validation_failed", "severity": "critical"}
+    # Pipeline runs live in <artifact_root>/runs/<run_id>; isolated adapter calls
+    # (tests) keep their evidence in run_dir only.
+    if run.parent.name == "runs":
+        artifacts = run.parents[1]
+        status = {
+            "contract_version": 1,
+            "run_id": context["run_id"],
+            "status": "alert" if alert else "ok",
+            "failure_count": len(report.get("failures", [])),
+            "exported_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        }
+        exported = artifacts / "monitoring" / "exported"
+        exported.mkdir(parents=True, exist_ok=True)
+        (exported / "data_validation.json").write_text(
+            json.dumps(status, indent=2), encoding="utf-8"
+        )
+        if alert:
+            alerts = artifacts / "monitoring" / "alerts"
+            alerts.mkdir(parents=True, exist_ok=True)
+            (alerts / f"data_validation-{context['run_id']}.json").write_text(
+                json.dumps(record, indent=2, sort_keys=True, allow_nan=False), encoding="utf-8"
+            )
+    return _write(context, "data-validation-alert.json", record) if alert else None
+
+
+def _summary(failures):
+    """Group per-cell failures so a 30,000-row file still reads as a few causes."""
+    counts = Counter((f.get("field", "*"), f["rule"]) for f in failures)
+    return [
+        {"field": field, "rule": rule, "rows": count}
+        for (field, rule), count in counts.most_common(25)
+    ]
+
+
+def _cell(value):
+    """Keep what the file actually says; only unambiguous numerals become numbers."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    if isinstance(value, bool) or not isinstance(value, str):
+        return value.item() if hasattr(value, "item") else value
+    text = value.strip()
+    if not text:
+        return None
+    for parse in (int, float):
+        try:
+            number = parse(text)
+        except ValueError:
+            continue
+        return number if math.isfinite(number) else text
+    return text
+
+
+def _canonical(name):
+    text = str(name).strip()
+    if text.lower().replace(".", " ").replace("_", " ") in TARGET_ALIASES:
+        return TARGET
+    return GENERIC_COLUMNS.get(text, text)
+
+
+def _load_table(path):
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        return pd.read_csv(path, dtype=str, keep_default_na=False)
+    if suffix == ".json":
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(value, dict):
+            value = value.get("instances", value.get("records"))
+        if not isinstance(value, list) or not all(isinstance(r, dict) for r in value):
+            raise ValueError("JSON data must be a list of row objects")
+        return pd.DataFrame(value, dtype=object)
+    raw = pd.read_excel(path, header=None, dtype=object)
+    # The UCI spreadsheet has a generic X1..Y row above the descriptive header.
+    header = next(
+        (i for i in range(min(3, len(raw))) if "LIMIT_BAL" in set(raw.iloc[i].astype(str))), 0
+    )
+    frame = raw.iloc[header + 1 :].reset_index(drop=True)
+    frame.columns = raw.iloc[header]
+    return frame
+
+
+def _ingest_file(context):
+    """Ingest an operator file as-is; the validate stage decides whether it may be used."""
+    reference = context["data_file"]
+    root = Path(context["project_root"])
+    source = confined_path(reference["uri"], root, must_exist=True)
+    if sha256_file(source) != reference["sha256"]:
+        raise PipelineError("artifact_mismatch", "data_file changed after the run started.")
+    run = Path(context["run_dir"])
+    copy = run / f"source{source.suffix.lower()}"
+    shutil.copyfile(source, copy)
+    try:
+        frame = _load_table(copy)
+    except Exception as error:  # unreadable input is bad data, not a worker crash
+        report = {
+            **_base(context),
+            "data_file": reference,
+            "passed": False,
+            "failures": [{"rule": "unreadable_file", "reason": type(error).__name__}],
+        }
+        report["failure_summary"] = _summary(report["failures"])
+        _publish_validation(context, report, alert=True)
+        raise PipelineError("data_validation_failed", "data_file could not be parsed.") from None
+    frame = frame.rename(columns=_canonical)
+    if "PAY_1" in frame.columns and "PAY_0" not in frame.columns:
+        frame = frame.rename(columns={"PAY_1": "PAY_0"})
+    records = [{str(k): _cell(v) for k, v in row.items()} for row in frame.to_dict("records")]
+    generated_ids = "ID" not in frame.columns
+    if generated_ids:  # ID is lineage only; number rows so splits stay client-disjoint
+        records = [{"ID": index, **row} for index, row in enumerate(records, start=1)]
+    path = run / "data.json"
+    path.write_text(json.dumps(records, allow_nan=False), encoding="utf-8")
+    data = _ref(path)
+    expected = {"ID", *FEATURES, TARGET}
+    columns = set(records[0]) if records else set()
+    result = {
+        **_base(context),
+        "dataset_version": data["sha256"],
+        "schema_version": "credit-default-v1",
+        "data": data,
+        "content_sha256": data["sha256"],
+        "source": "data_file:" + reference["uri"],
+        "source_sha256": reference["sha256"],
+        "data_file": reference,
+        "generated_ids": generated_ids,
+        "created_at": datetime.now(UTC).isoformat(),
+        "row_count": len(records),
+        "feature_columns": list(FEATURES),
+        "target_column": TARGET,
+        "missing_columns": sorted(expected - columns),
+        "unexpected_columns": sorted(columns - expected),
+        "artifacts": [data, _ref(copy)],
+    }
+    result["artifacts"].append(_write(context, "dataset-manifest.json", result))
+    return result
+
+
 def ingest(context):
     run = Path(context["run_dir"])
     archive = run / "source.zip"
     if context.get("retraining"):
         return _ingest_snapshot(context)
+    if context.get("data_file"):
+        return _ingest_file(context)
     local = context["config"]["dataset"].get("source_archive")
     if local:
         shutil.copyfile(
@@ -68,6 +216,8 @@ def ingest(context):
     failures = validate_rows(frame.to_dict("records"))
     if failures:
         _write(context, "ingestion-errors.json", failures)
+        report = {**_base(context), "passed": False, "failures": failures}
+        _publish_validation(context, {**report, "failure_summary": _summary(failures)}, alert=True)
         raise PipelineError("source_format", "Source fails canonical row policy.")
     path = run / "data.json"
     frame.to_json(path, orient="records")
@@ -174,7 +324,10 @@ def validate(context):
     failures = validate_rows(frame.to_dict("records"))
     artifacts = list(source["artifacts"])
     backend = "not_run_row_failures"
-    if not failures:
+    # TFDV also profiles rows that broke the row policy, as long as the columns match,
+    # so a bad file gets both the exact cells and the schema anomalies.
+    shape_ok = not any(f["rule"] in {"columns", "empty_dataset"} for f in failures)
+    if shape_ok:
         schema = confined_path(
             "schemas/credit_default.pbtxt", Path(context["project_root"]), must_exist=True
         )
@@ -184,8 +337,12 @@ def validate(context):
             artifacts.extend(refs)
             backend = "tensorflow-data-validation"
         except ImportError:
-            failures.append({"rule": "missing_tfdv_dependency"})
-            backend = "unavailable"
+            if not failures:
+                failures.append({"rule": "missing_tfdv_dependency"})
+                backend = "unavailable"
+        except Exception as error:  # mixed-type columns cannot be profiled
+            failures.append({"rule": "tfdv_unprofilable", "reason": type(error).__name__})
+            backend = "tensorflow-data-validation"
     report = {
         **_base(context),
         "dataset_version": source["dataset_version"],
@@ -193,15 +350,15 @@ def validate(context):
         "row_count": len(frame),
         "passed": not failures,
         "failures": failures,
+        "failure_summary": _summary(failures),
         "validation_backend": backend,
     }
+    for key in ("data_file", "missing_columns", "unexpected_columns"):
+        if source.get(key):
+            report[key] = source[key]
     artifacts.append(_write(context, "validation-report.json", report))
+    _publish_validation(context, report, alert=bool(failures))
     if failures:
-        _write(
-            context,
-            "data-validation-alert.json",
-            {**report, "event": "data_validation_failed", "severity": "critical"},
-        )
         raise PipelineError(
             "data_validation_failed", "Hard data validation failed; report and alert persisted."
         )

@@ -7,12 +7,14 @@ config=configs/project.yaml
 infrastructure_only=false
 timeout_seconds=7200
 run_id=
+data_file=
 while (($#)); do
   case "$1" in
     --config) [[ $# -ge 2 ]] || { printf 'Missing --config value\n' >&2; exit 2; }; config=$2; shift 2 ;;
     --infrastructure-only) infrastructure_only=true; shift ;;
     --timeout-seconds) [[ $# -ge 2 ]] || { printf 'Missing timeout value\n' >&2; exit 2; }; timeout_seconds=$2; shift 2 ;;
     --run-id) [[ $# -ge 2 ]] || { printf 'Missing run ID\n' >&2; exit 2; }; run_id=$2; shift 2 ;;
+    --data-file) [[ $# -ge 2 ]] || { printf 'Missing data file\n' >&2; exit 2; }; data_file=$2; shift 2 ;;
     *) printf 'Unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
@@ -50,4 +52,5 @@ docker compose --profile application build api
 docker compose --profile application up -d --wait --wait-timeout 300 api
 launch_args=(--config "$config" --timeout-seconds "$timeout_seconds")
 if [[ -n "$run_id" ]]; then launch_args+=(--run-id "$run_id"); fi
+if [[ -n "$data_file" ]]; then launch_args+=(--data-file "$data_file"); fi
 docker compose exec -T pipeline-worker python /workspace/scripts/airflow-run.py "${launch_args[@]}"

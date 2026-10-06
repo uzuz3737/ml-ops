@@ -28,7 +28,14 @@ def dispatch_step(step: str, run_id: str, config_path: str, **context):
         expected_run_id = "retrain-" + trigger_id
         if run_id != expected_run_id or context["dag_run"].run_id != expected_run_id:
             raise ValueError("Retraining must use retrain-<trigger_id> for both run IDs")
-    return execute_remote(step, run_id, config_path)
+    # Optional operator dataset under data/, e.g. {"data_file": "data/bad-data.csv"};
+    # the worker pins its checksum, so every stage of this run sees the same file.
+    data_file = configuration.get("data_file")
+    if not data_file:
+        return execute_remote(step, run_id, config_path)
+    if configuration.get("mode") == "retrain":
+        raise ValueError("Retraining reads its approved snapshot, not data_file")
+    return execute_remote(step, run_id, config_path, data_file=data_file)
 
 
 with DAG(

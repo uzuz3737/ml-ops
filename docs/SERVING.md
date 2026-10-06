@@ -52,6 +52,10 @@ Request checks follow P1's serving row policy (`mlops_project.data.policy`): all
 
 Each 422 lists `{rule, field, instance_index, message}` per problem, so the instructor's test cases can be explained live.
 
+Rows copied straight from the UCI file may keep their `ID`. It must be a positive whole number (`identifier` rule otherwise), never reaches the model or the drift log, and is echoed in that row's prediction (`{"ID": 101, "label": 0, ...}`). The target column is still rejected, because a request that carries the answer is a client bug.
+
+For a test-case file, `scripts/predict-file.py data/<file>` sends each row on its own request and prints the label/probability or the exact rejected field per row; it reads CSV, JSON and XLS/XLSX with UCI, Kaggle (`PAY_1`, `default.payment.next.month`) or `X1..X23` headers, and compares against a label column when the file has one.
+
 ## Why real-time serving (S4)
 
 The stakeholder use is a credit officer or an approval workflow asking about one client at the moment a limit or collection decision is made. That needs an answer in well under a second per request, the current model version for audit, and immediate rejection of malformed records — an online API. Batch scoring of the whole book is still possible through the same endpoint (up to `MLOPS_MAX_BATCH_SIZE`, default 1000 instances), and every scored request is logged for monitoring and delayed labels.
@@ -89,7 +93,9 @@ It takes the newest `minimum_samples` (500) prediction events of the confirmed a
 - runs P1 `feature_drift` against the train partition of the run that produced the model, with `data_drift_threshold` 0.0662 (P1 calibration on UCI train, 500-row windows, 99th percentile of 100 bootstrap windows);
 - runs P2 `evaluate_quality` on the joined labels against the bundle's own validation metrics, with `quality_degradation_threshold` 0.123044 and the minimum label/class/coverage rules from `configs/monitoring.yaml`.
 
-Both results are published for `/metrics`; every check that fires also writes `artifacts/monitoring/alerts/<alert_id>.json` with the statistic, observed value, threshold and suggested action. Prometheus rules in `infra/prometheus/alerts.yml`: `ApiDown`, `ModelNotReady`, `PredictErrorRateHigh`, `PredictLatencyP95High`, `InvalidInputSpike` (rate-based, not one alert per bad request), `DeploymentFailed`, `FeatureDrift`, `ModelQualityDegraded`.
+Both results are published for `/metrics`; every check that fires also writes `artifacts/monitoring/alerts/<alert_id>.json` with the statistic, observed value, threshold and suggested action. Prometheus rules in `infra/prometheus/alerts.yml`: `ApiDown`, `ModelNotReady`, `PredictErrorRateHigh`, `PredictLatencyP95High`, `InvalidInputSpike` (rate-based, not one alert per bad request), `DeploymentFailed`, `FeatureDrift`, `ModelQualityDegraded`, `DataValidationFailed` (the pipeline's validate stage stopped a run; exported from `artifacts/monitoring/exported/data_validation.json`) and `MonitoringJobStale` (no drift/quality pass for 24 h, so the dashboard would otherwise show a frozen "ok").
+
+Retraining policy (`configs/monitoring.yaml`): a data-drift alert alone means investigate; only a labeled quality alert above its threshold, with enough labels of both classes, a new approved labeled snapshot, separate train/validation and the final test excluded, may start retraining, at most once per `cooldown_seconds` and never while another run is active. `scripts/retraining-demo.py --approve-snapshot` performs that loop after the concept-drift scenario (see the README).
 
 ### Live demo
 

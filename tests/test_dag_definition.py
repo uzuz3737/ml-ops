@@ -103,3 +103,20 @@ def test_retrain_requires_same_deduplicated_trigger_identity(dag_module, monkeyp
     )
     with pytest.raises(ValueError, match="both run IDs"):
         dag_module.dispatch_step("ingest", "different", "configs/project.yaml", dag_run=run)
+
+
+def test_data_file_conf_reaches_every_stage_but_not_retraining(dag_module, monkeypatch):
+    received = []
+    monkeypatch.setattr(
+        dag_module,
+        "execute_remote",
+        lambda step, run_id, config, **kwargs: received.append(kwargs) or {"state": "succeeded"},
+    )
+    run = SimpleNamespace(conf={"data_file": "data/bad-domain.csv"}, run_id="manual__x")
+    dag_module.dispatch_step("validate", "demo-1", "configs/project.yaml", dag_run=run)
+    assert received == [{"data_file": "data/bad-domain.csv"}]
+    retrain = SimpleNamespace(
+        conf={"mode": "retrain", "trigger_id": "t", "data_file": "data/x.csv"}, run_id="retrain-t"
+    )
+    with pytest.raises(ValueError, match="approved snapshot"):
+        dag_module.dispatch_step("ingest", "retrain-t", "configs/project.yaml", dag_run=retrain)

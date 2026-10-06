@@ -115,6 +115,24 @@ def test_invalid_input_is_422_with_rule(served, body, rule):
     assert rule in {d["rule"] for d in details}
 
 
+def test_client_id_is_echoed_but_not_scored(served, settings):
+    body = {"instances": [_instance(ID=101, LIMIT_BAL=100_000), _instance(LIMIT_BAL=900_000)]}
+    response = served.post("/predict", json=body)
+    assert response.status_code == 200
+    predictions = response.json()["predictions"]
+    assert predictions[0]["ID"] == 101 and "ID" not in predictions[1]
+    assert [p["label"] for p in predictions] == [0, 1]
+    logged = (settings.events_dir / "predictions.jsonl").read_text().splitlines()
+    assert all("ID" not in json.loads(line)["features"] for line in logged)
+
+
+@pytest.mark.parametrize("value", [0, -3, 1.5, "7", True, None])
+def test_invalid_client_id_is_422(served, value):
+    response = served.post("/predict", json={"instances": [_instance(ID=value)]})
+    assert response.status_code == 422
+    assert {d["rule"] for d in response.json()["error"]["details"]} == {"identifier"}
+
+
 def test_nan_is_rejected(served):
     raw = json.dumps({"instances": [_instance()]}).replace("100000", "NaN", 1)
     response = served.post(

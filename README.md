@@ -62,7 +62,19 @@ docker compose exec pipeline-worker python -m mlops_project.pipelines.deployment
 docker compose exec pipeline-worker python scripts/monitoring-demo.py --scenario healthy         # ปกติ ไม่มี alert
 docker compose exec pipeline-worker python scripts/monitoring-demo.py --scenario feature-drift   # มี data drift alert
 docker compose exec pipeline-worker python scripts/monitoring-demo.py --scenario concept-drift   # มี quality alert
+
+# วงจรเทรนใหม่: หลัง concept-drift alert สร้างชุดข้อมูลใหม่ที่ติด label แล้ว สั่ง Airflow เทรนใหม่ แล้วผ่าน gate
+docker compose exec pipeline-worker python scripts/retraining-demo.py --approve-snapshot
+
+# ข้อมูลเสีย: สร้างไฟล์เสียจากข้อมูลจริง แล้วป้อนเข้า pipeline ต้องหยุดที่ขั้น validate พร้อม alert
+docker compose exec pipeline-worker python scripts/make-bad-data.py
+docker compose exec pipeline-worker python scripts/airflow-run.py --data-file data/bad-domain.csv
+
+# test case จากอาจารย์ (CSV/JSON/XLSX วางไว้ใน data/) ส่งเข้า API ทีละแถวแล้วพิมพ์ผล
+docker compose exec pipeline-worker python scripts/predict-file.py data/test-cases.csv
 ```
+
+ไฟล์ข้อมูลใดก็ได้ใน `data/` ที่ใช้หัวคอลัมน์ของ UCI (รวมถึงแบบ Kaggle `PAY_1`/`default.payment.next.month` หรือ `X1..X23`) ส่งเข้า pipeline ได้ด้วย `--data-file` (หรือ conf `{"data_file": "data/x.csv"}` ตอนกด Trigger DAG ในหน้าเว็บ Airflow) ถ้าข้อมูลผิดจะหยุดที่ `validate` และเขียนเหตุผลแยกตามคอลัมน์ลงใน `artifacts/runs/<run-id>/validation-report.json` ส่วน `/predict` จะรับคอลัมน์ `ID` ได้ แต่ไม่ส่งเข้าโมเดล และส่ง `ID` คืนมาพร้อมผลทำนาย
 
 ผลแต่ละ run อยู่ที่ `artifacts/runs/<run-id>/` ข้อมูล deploy อยู่ที่ `artifacts/deployments/` ส่วน alert อยู่ที่ `artifacts/monitoring/alerts/`
 
@@ -186,7 +198,19 @@ docker compose exec pipeline-worker python -m mlops_project.pipelines.deployment
 docker compose exec pipeline-worker python scripts/monitoring-demo.py --scenario healthy         # no alert
 docker compose exec pipeline-worker python scripts/monitoring-demo.py --scenario feature-drift   # data drift alert
 docker compose exec pipeline-worker python scripts/monitoring-demo.py --scenario concept-drift   # quality alert
+
+# retraining loop: after the concept-drift alert, build the new labeled snapshot, trigger Airflow, pass the gates
+docker compose exec pipeline-worker python scripts/retraining-demo.py --approve-snapshot
+
+# bad data: corrupt real rows, feed them to the pipeline; it must stop at validate with an alert
+docker compose exec pipeline-worker python scripts/make-bad-data.py
+docker compose exec pipeline-worker python scripts/airflow-run.py --data-file data/bad-domain.csv
+
+# instructor test cases (CSV/JSON/XLSX placed in data/), scored row by row through the API
+docker compose exec pipeline-worker python scripts/predict-file.py data/test-cases.csv
 ```
+
+Any file in `data/` with UCI headers (including the Kaggle `PAY_1`/`default.payment.next.month` spelling or `X1..X23`) can be fed to the pipeline with `--data-file` (or conf `{"data_file": "data/x.csv"}` when triggering the DAG in the Airflow UI). Bad data stops at `validate` with per-column reasons in `artifacts/runs/<run-id>/validation-report.json`. `/predict` also accepts an `ID` column; it is not sent to the model and is echoed back with each prediction.
 
 Run outputs are in `artifacts/runs/<run-id>/`, deployments in `artifacts/deployments/`, alerts in `artifacts/monitoring/alerts/`.
 
