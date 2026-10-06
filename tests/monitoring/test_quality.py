@@ -191,6 +191,7 @@ def test_alert_requires_independent_approved_dataset(quality_inputs):
     from mlops_project.pipelines.retraining import _validate_alert
 
     assert alert["threshold"] == options["policy"]["quality_degradation_threshold"]
-    assert _validate_alert(
-        alert, options["policy"], datetime.fromisoformat(options["as_of"])
-    ) == "drift-1"
+    assert (
+        _validate_alert(alert, options["policy"], datetime.fromisoformat(options["as_of"]))
+        == "drift-1"
+    )
