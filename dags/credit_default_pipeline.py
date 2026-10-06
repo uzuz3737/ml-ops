@@ -8,6 +8,7 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.operators.python import PythonOperator
 
 from mlops_project.pipelines.client import execute_remote
@@ -49,6 +50,16 @@ with DAG(
     dagrun_timeout=timedelta(hours=2),
     default_args={"owner": "P0", "retries": 0},
     tags=["credit-default", "P0", "integration"],
+    # Shown as a form in "Trigger DAG w/ config"; empty means the pinned UCI source.
+    params={
+        "data_file": Param(
+            "",
+            type="string",
+            title="Data file (optional)",
+            description="CSV/JSON/XLS(X) under data/, e.g. data/bad-domain.csv. "
+            "Leave empty to train from the UCI source.",
+        ),
+    },
 ) as dag:
     tasks = {
         step: PythonOperator(

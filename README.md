@@ -118,7 +118,7 @@ docker compose exec pipeline-worker python scripts/airflow-run.py --data-file da
 docker compose exec pipeline-worker python scripts/predict-file.py data/test-cases.csv
 ```
 
-ไฟล์ข้อมูลใดก็ได้ใน `data/` ที่ใช้หัวคอลัมน์ของ UCI (รวมถึงแบบ Kaggle `PAY_1`/`default.payment.next.month` หรือ `X1..X23`) ส่งเข้า pipeline ได้ด้วย `--data-file` (หรือ conf `{"data_file": "data/x.csv"}` ตอนกด Trigger DAG ในหน้าเว็บ Airflow) ถ้าข้อมูลผิดจะหยุดที่ `validate` และเขียนเหตุผลแยกตามคอลัมน์ลงใน `artifacts/runs/<run-id>/validation-report.json` ส่วน `/predict` จะรับคอลัมน์ `ID` ได้ แต่ไม่ส่งเข้าโมเดล และส่ง `ID` คืนมาพร้อมผลทำนาย
+ไฟล์ข้อมูลใดก็ได้ใน `data/` ที่ใช้หัวคอลัมน์ของ UCI (รวมถึงแบบ Kaggle `PAY_1`/`default.payment.next.month` หรือ `X1..X23`) ส่งเข้า pipeline ได้ด้วย `--data-file` (หรือในหน้าเว็บ Airflow กด Trigger DAG w/ config แล้วใส่ช่อง **Data file** เช่น `data/bad-domain.csv`) ถ้าข้อมูลผิดจะหยุดที่ `validate` และเขียนเหตุผลแยกตามคอลัมน์ลงใน `artifacts/runs/<run-id>/validation-report.json` ส่วน `/predict` จะรับคอลัมน์ `ID` ได้ แต่ไม่ส่งเข้าโมเดล และส่ง `ID` คืนมาพร้อมผลทำนาย
 
 ผลแต่ละ run อยู่ที่ `artifacts/runs/<run-id>/` ข้อมูล deploy อยู่ที่ `artifacts/deployments/` ส่วน alert อยู่ที่ `artifacts/monitoring/alerts/`
 
@@ -298,7 +298,7 @@ docker compose exec pipeline-worker python scripts/airflow-run.py --data-file da
 docker compose exec pipeline-worker python scripts/predict-file.py data/test-cases.csv
 ```
 
-Any file in `data/` with UCI headers (including the Kaggle `PAY_1`/`default.payment.next.month` spelling or `X1..X23`) can be fed to the pipeline with `--data-file` (or conf `{"data_file": "data/x.csv"}` when triggering the DAG in the Airflow UI). Bad data stops at `validate` with per-column reasons in `artifacts/runs/<run-id>/validation-report.json`. `/predict` also accepts an `ID` column; it is not sent to the model and is echoed back with each prediction.
+Any file in `data/` with UCI headers (including the Kaggle `PAY_1`/`default.payment.next.month` spelling or `X1..X23`) can be fed to the pipeline with `--data-file` (or in the Airflow UI: Trigger DAG w/ config, then fill the **Data file** field, e.g. `data/bad-domain.csv`). Bad data stops at `validate` with per-column reasons in `artifacts/runs/<run-id>/validation-report.json`. `/predict` also accepts an `ID` column; it is not sent to the model and is echoed back with each prediction.
 
 Run outputs are in `artifacts/runs/<run-id>/`, deployments in `artifacts/deployments/`, alerts in `artifacts/monitoring/alerts/`.
 

@@ -41,7 +41,12 @@ def dag_module(monkeypatch):
 
     airflow.DAG = DagDouble
     python_operators.PythonOperator = OperatorDouble
+    models = ModuleType("airflow.models")
+    param_module = ModuleType("airflow.models.param")
+    param_module.Param = lambda default, **schema: {"default": default, **schema}
     monkeypatch.setitem(sys.modules, "airflow", airflow)
+    monkeypatch.setitem(sys.modules, "airflow.models", models)
+    monkeypatch.setitem(sys.modules, "airflow.models.param", param_module)
     monkeypatch.setitem(sys.modules, "airflow.operators", operators)
     monkeypatch.setitem(sys.modules, "airflow.operators.python", python_operators)
     path = Path(__file__).resolve().parents[1] / "dags" / "credit_default_pipeline.py"
@@ -72,6 +77,8 @@ def test_graph_requires_data_gates_all_training_runs_and_approval(dag_module):
     assert all(task.parameters["trigger_rule"] == "all_success" for task in tasks.values())
     assert dag_module.dag.parameters["max_active_runs"] == 1
     assert dag_module.dag.parameters["schedule"] is None
+    # The UI form defaults to the UCI source; dispatch treats "" as no data_file.
+    assert dag_module.dag.parameters["params"]["data_file"]["default"] == ""
 
 
 def test_dispatch_preserves_worker_failure_and_normalizes_generated_run_id(dag_module, monkeypatch):
