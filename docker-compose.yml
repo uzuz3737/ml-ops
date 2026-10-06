@@ -1,0 +1,185 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.airflow
+  user: "0:0"
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqnvq8=
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__CORE__DAG_DIR_LIST_INTERVAL: "10"
+    AIRFLOW__CORE__MIN_FILE_PROCESS_INTERVAL: "5"
+    AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+    PYTHONPATH: /opt/airflow
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./src:/opt/airflow/src
+    - ./config:/opt/airflow/config
+    - ./data:/opt/airflow/data
+    - ./models:/opt/airflow/models
+    - ./logs:/opt/airflow/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
+    mlflow:
+      condition: service_started
+
+services:
+  # ----------------------------------------------------
+  # MLflow Tracking & Model Registry Server
+  # ----------------------------------------------------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: mlflow-server
+    ports:
+      - "5001:5000"
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow.db
+      --serve-artifacts
+      --artifacts-destination /mlartifacts
+      --default-artifact-root mlflow-artifacts:/
+      --host 0.0.0.0
+      --port 5000
+      --allowed-hosts "localhost:*,127.0.0.1:*,mlflow:5000"
+    volumes:
+      - ./mlruns:/mlflow
+      - ./mlartifacts:/mlartifacts
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------
+  # Airflow Metadata DB
+  # ----------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: airflow-postgres
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: always
+
+  # ----------------------------------------------------
+  # Airflow Database Initialization
+  # ----------------------------------------------------
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    user: "0:0"
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        /entrypoint airflow version
+        /entrypoint airflow dags reserialize || true
+        /entrypoint airflow dags unpause credit_card_default_mlops_pipeline || true
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ----------------------------------------------------
+  # Airflow Webserver
+  # ----------------------------------------------------
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ----------------------------------------------------
+  # Airflow Scheduler
+  # ----------------------------------------------------
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ----------------------------------------------------
+  # Model Serving: FastAPI with Prometheus Metrics
+  # ----------------------------------------------------
+  fastapi-serving:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.fastapi
+    container_name: fastapi-serving
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - ./models:/app/models
+      - ./config:/app/config
+    depends_on:
+      mlflow:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------
+  # Monitoring: Prometheus
+  # ----------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    depends_on:
+      - fastapi-serving
+
+  # ----------------------------------------------------
+  # Monitoring: Grafana Dashboard
+  # ----------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
