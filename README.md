@@ -17,20 +17,52 @@
 
 **สถานะ (4 ต.ค. 2026):** รันครบทั้งเส้นใน Docker ผ่านแล้ว run `full-run-002` ผ่าน gate ทุกข้อ (AP 0.5375, p95 204.5 ms, 60 req/s, error 0%) และ deploy สำเร็จ ทดสอบ rollback, alert ของ data drift และ concept drift แล้วด้วย ดูหลักฐานที่ [docs/evidence/INDEX.md](docs/evidence/INDEX.md)
 
-### วิธีรัน (Docker)
+### วิธีรันบนเครื่องเปล่า (Docker)
 
-**ต้องมี:** Docker Desktop (Linux containers) ที่มี Compose 2.20 ขึ้นไป, Git, พื้นที่ว่างประมาณ 20 GB และอินเทอร์เน็ตสำหรับโหลด image กับข้อมูล UCI
+**ต้องมี**
+
+- Docker Desktop (Windows ใช้ WSL 2 backend, macOS ได้ทั้ง Intel และ Apple Silicon) หรือ Docker Engine + Compose 2.20 ขึ้นไปบน Linux ใน Docker Desktop → Settings → Resources ให้ **memory อย่างน้อย 8 GB** และพื้นที่ดิสก์ประมาณ 20 GB
+- Git (Windows ใช้ Git for Windows ซึ่งมี Git Bash มาด้วย)
+- อินเทอร์เน็ต สำหรับโหลด image, Python package และชุดข้อมูล UCI (pipeline โหลดเองและตรวจ SHA-256 ทุกครั้ง)
+- port 8000, 8080, 5000, 3000 และ 9090 ต้องว่าง
+
+ไม่ต้องลงอะไรเพิ่มบนเครื่อง ทั้ง Python, Airflow, MLflow, TFDV และโมเดลรันอยู่ใน container ทั้งหมด
+
+**1. โหลดโค้ดและตั้งค่า**
 
 ```bash
 git clone https://github.com/uzuz3737/ml-ops.git
 cd ml-ops
 cp .env.example .env          # PowerShell: Copy-Item .env.example .env
-bash scripts/run-all.sh --config configs/project.yaml --run-id my-first-run
 ```
 
-**บน Windows** ให้รันคำสั่งสุดท้ายใน Git Bash แบบนี้: `MSYS_NO_PATHCONV=1 bash scripts/run-all.sh --config configs/project.yaml --run-id my-first-run` (หลักฐานทั้งหมดรันด้วยวิธีนี้) ถ้าจะใช้ PowerShell ก็มี `.\scripts\run-all.ps1 -Config configs/project.yaml -RunId my-first-run` ให้ แต่ห้ามสั่ง redirect output ด้วย `*>` เพราะ Windows PowerShell 5.1 จะนับข้อความ progress ของ Docker เป็น error แล้วหยุดทันที
+ค่าเริ่มต้นใน `.env` ใช้เดโมบนเครื่องได้เลยไม่ต้องแก้
 
-สคริปต์จะ build image, ตรวจว่ามีครบทุกขั้น (preflight), เปิดทุก service, สั่ง Airflow DAG แล้วรอจนจบ รอบแรกใช้เวลาประมาณ 20–30 นาที (build image + วัดความเร็วอีก 5 นาที) ถ้าเห็น `Airflow run state: success` แปลว่า API กำลังเสิร์ฟโมเดลใหม่อยู่
+**2. รันทั้งระบบด้วยคำสั่งเดียว** (เลือกตาม shell ที่ใช้)
+
+| Shell | คำสั่ง |
+| --- | --- |
+| macOS / Linux | `bash scripts/run-all.sh --run-id first-run` |
+| Windows, Git Bash (หลักฐานทั้งหมดรันด้วยวิธีนี้) | `MSYS_NO_PATHCONV=1 bash scripts/run-all.sh --run-id first-run` |
+| Windows PowerShell | `powershell -ExecutionPolicy Bypass -File scripts\run-all.ps1 -RunId first-run` |
+
+สคริปต์จะ build image, ตรวจว่ามีครบทุกขั้น (preflight), เปิดทุก service, สั่ง Airflow DAG แล้วรอจนจบ: ข้อมูลดิบ UCI → ตรวจด้วย TFDV → split → ทดลอง 3 โมเดล → registry → load test → gate → deploy รอบแรกใช้เวลาประมาณ 20–40 นาที (build image, เทรน 3 โมเดล และ load test 5 นาที ถ้าเป็น Apple Silicon จะช้ากว่านี้ เพราะ image ของ worker ต้องรันแบบจำลอง x86-64) ถ้าสำเร็จจะจบด้วย
+
+```text
+Airflow run state: success
+Verified deployment deploy-… running model 1.
+```
+
+รันรอบใหม่ทุกครั้งต้องใช้ `--run-id` ใหม่ ถ้าใช้ PowerShell ห้ามสั่ง redirect output ด้วย `*>` เพราะ Windows PowerShell 5.1 จะนับข้อความ progress ของ Docker เป็น error แล้วหยุดทันที
+
+**3. เช็คว่าใช้งานได้**
+
+```bash
+curl -s http://localhost:8000/ready        # {"status": "ready", "model_version": "1", ...}
+curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" --data @examples/predict.json
+```
+
+(ถ้าใช้ PowerShell ให้พิมพ์ `curl.exe` แทน `curl`)
 
 | Service | URL | Login |
 | --- | --- | --- |
@@ -40,7 +72,19 @@ bash scripts/run-all.sh --config configs/project.yaml --run-id my-first-run
 | Grafana | http://localhost:3000 | `admin` / `grafana-local-demo` |
 | Prometheus | http://localhost:9090 | — |
 
-รหัสผ่านทั้งหมดตั้งไว้ใน `.env` ถ้าใช้ port 5000 ไม่ได้ (Windows บางเครื่องจองไว้) ให้ใส่ `MLFLOW_HOST_PORT=5050` ใน `.env`
+รหัสผ่านทั้งหมดตั้งไว้ใน `.env`
+
+**ถ้ามีปัญหา**
+
+| อาการ | วิธีแก้ |
+| --- | --- |
+| `Docker is required` หรือ engine ไม่พร้อม | เปิด Docker Desktop แล้วรอจนขึ้นว่า engine running |
+| `Create .env from .env.example …` | ทำข้อ 1 ในโฟลเดอร์โปรเจกต์ |
+| `port is already allocated` | ปิดโปรแกรมที่ใช้ port นั้นอยู่ ถ้าเป็น MLflow ให้ใส่ `MLFLOW_HOST_PORT=5050` ใน `.env` (AirPlay ของ macOS และ Windows บางเครื่องจอง 5000 ไว้) |
+| build หรือ stage ถูก kill (exit code 137) | เพิ่ม memory ให้ Docker Desktop เป็น 8 GB ขึ้นไป |
+| `ingest` ล้มด้วย `source_checksum` หรือ network error | โหลดข้อมูลจาก UCI ไม่สำเร็จ เช็คอินเทอร์เน็ตแล้วรันใหม่ด้วย `--run-id` ใหม่ |
+| `This run ID already belongs to a different configuration` | ใช้ `--run-id` ใหม่ |
+| อยากเริ่มใหม่จากศูนย์ | `docker compose --profile application down -v` แล้วลบโฟลเดอร์ `artifacts/` |
 
 ### ลองใช้งาน
 
@@ -153,20 +197,52 @@ One command runs the whole lifecycle in Docker, orchestrated by Airflow.
 
 **Status (4 Oct 2026):** full lifecycle verified in Docker — run `full-run-002` passed every gate (AP 0.5375, p95 204.5 ms, 60 req/s, 0% errors) and was deployed; rollback, feature-drift and concept-drift alerts were demonstrated. Evidence: [docs/evidence/INDEX.md](docs/evidence/INDEX.md).
 
-### Quick start (Docker)
+### Quick start on a clean machine (Docker)
 
-**Needs:** Docker Desktop (Linux containers) with Compose 2.20+, Git, ~20 GB free disk, internet for images and the UCI download.
+**You need**
+
+- Docker Desktop (Windows with the WSL 2 backend, or macOS Intel/Apple Silicon), or Docker Engine with Compose 2.20+ on Linux. In Docker Desktop → Settings → Resources allow **at least 8 GB memory** and about 20 GB of disk.
+- Git (on Windows, Git for Windows, which includes Git Bash).
+- Internet access for the images, the Python packages and the UCI dataset, which the pipeline downloads and checks against a fixed SHA-256.
+- Free local ports 8000, 8080, 5000, 3000 and 9090.
+
+Nothing else is installed on the host: Python, Airflow, MLflow, TFDV and the models all run in containers.
+
+**1. Get the code and the settings**
 
 ```bash
 git clone https://github.com/uzuz3737/ml-ops.git
 cd ml-ops
 cp .env.example .env          # PowerShell: Copy-Item .env.example .env
-bash scripts/run-all.sh --config configs/project.yaml --run-id my-first-run
 ```
 
-**On Windows** run the last command in Git Bash as `MSYS_NO_PATHCONV=1 bash scripts/run-all.sh --config configs/project.yaml --run-id my-first-run` (this is how the evidence runs were made). `.\scripts\run-all.ps1 -Config configs/project.yaml -RunId my-first-run` also exists for PowerShell; do not redirect its output with `*>`, which makes Windows PowerShell 5.1 treat Docker's progress messages as errors.
+The defaults in `.env` work unchanged for a local demo.
 
-The script builds the images, checks every stage exists (preflight), starts all services, triggers the Airflow DAG and waits until it finishes. The first run takes about 20–30 minutes (image builds plus a 5-minute load test). It ends with `Airflow run state: success` and the API serving the new model.
+**2. Run everything with one command** (pick your shell)
+
+| Shell | Command |
+| --- | --- |
+| macOS / Linux | `bash scripts/run-all.sh --run-id first-run` |
+| Windows, Git Bash (used for all recorded evidence) | `MSYS_NO_PATHCONV=1 bash scripts/run-all.sh --run-id first-run` |
+| Windows PowerShell | `powershell -ExecutionPolicy Bypass -File scripts\run-all.ps1 -RunId first-run` |
+
+The script builds the images, checks that every stage exists (preflight), starts all services, triggers the Airflow DAG and waits for it: raw UCI data → TFDV validation → split → three experiments → registry → load test → gate → deployment. The first run takes about 20–40 minutes (image builds, three models and a 5-minute load test; Apple Silicon is slower because the worker image runs under x86-64 emulation). It ends with:
+
+```text
+Airflow run state: success
+Verified deployment deploy-… running model 1.
+```
+
+Every new run needs a new `--run-id`. In PowerShell do not redirect the output with `*>`; Windows PowerShell 5.1 then treats Docker's progress messages as errors.
+
+**3. Check that it works**
+
+```bash
+curl -s http://localhost:8000/ready        # {"status": "ready", "model_version": "1", ...}
+curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" --data @examples/predict.json
+```
+
+(PowerShell: type `curl.exe` instead of `curl`.)
 
 | Service | URL | Login |
 | --- | --- | --- |
@@ -176,7 +252,19 @@ The script builds the images, checks every stage exists (preflight), starts all 
 | Grafana | http://localhost:3000 | `admin` / `grafana-local-demo` |
 | Prometheus | http://localhost:9090 | — |
 
-Logins come from `.env`. If port 5000 is blocked (Windows sometimes reserves it), set `MLFLOW_HOST_PORT=5050` in `.env`.
+Logins come from `.env`.
+
+**If something goes wrong**
+
+| Symptom | Fix |
+| --- | --- |
+| `Docker is required` or the engine is unavailable | Start Docker Desktop and wait until it reports that the engine is running |
+| `Create .env from .env.example …` | Do step 1 in the project folder |
+| `port is already allocated` | Stop the program using that port. For MLflow, set `MLFLOW_HOST_PORT=5050` in `.env` (macOS AirPlay and some Windows setups hold port 5000) |
+| A build or stage is killed (exit code 137) | Give Docker Desktop more memory (8 GB or more) |
+| `ingest` fails with `source_checksum` or a network error | The UCI download failed; check the internet connection and rerun with a new `--run-id` |
+| `This run ID already belongs to a different configuration` | Use a new `--run-id` |
+| Start again from nothing | `docker compose --profile application down -v`, then delete the `artifacts/` folder |
 
 ### Try it
 

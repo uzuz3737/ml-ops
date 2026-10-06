@@ -72,6 +72,8 @@ services:
     restart: unless-stopped
 
   pipeline-worker:
+    # TFDV/TensorFlow locks are x86-64 wheels; Apple Silicon runs this under emulation.
+    platform: linux/amd64
     build:
       context: .
       target: integration
@@ -141,6 +143,7 @@ services:
 
   api:
     profiles: [application]
+    platform: linux/amd64  # built FROM the worker's integration stage
     build:
       context: .
       target: api
