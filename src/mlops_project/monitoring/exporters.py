@@ -17,16 +17,19 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 
 from prometheus_client.core import GaugeMetricFamily
 
-from ..pipelines.runner import atomic_json, utc_now
+from ..pipelines.jsonio import atomic_json, utc_now
 
 STATUSES = ("ok", "alert", "insufficient_data", "error")
 QUALITY_METRICS = ("average_precision", "roc_auc", "precision", "recall", "f1", "brier_score")
 FEATURE_DRIFT_FILE = "feature_drift.json"
 QUALITY_FILE = "quality.json"
+# Written by the pipeline's validate stage (mlops_project.data.pipeline).
+DATA_VALIDATION_FILE = "data_validation.json"
 
 
 def _drift_status(result: dict) -> str:
@@ -78,6 +81,14 @@ def _feature_scores(result: dict) -> dict:
 def _quality_metrics(result: dict) -> dict:
     metrics = result.get("metrics", {})
     return metrics if isinstance(metrics, dict) else {}
+
+
+def _epoch(result: dict | None) -> float | None:
+    try:
+        moment = datetime.fromisoformat(result["exported_at"].replace("Z", "+00:00"))
+    except (TypeError, KeyError, AttributeError, ValueError):
+        return None
+    return moment.timestamp() if moment.tzinfo else None
 
 
 class MonitoringCollector:
@@ -132,3 +143,23 @@ class MonitoringCollector:
             if quality and _finite(quality.get(key)):
                 family.add_metric([], float(quality[key]))
             yield family
+
+        # A stopped monitoring job leaves the last status frozen; export its age.
+        last_run = GaugeMetricFamily(
+            "monitoring_last_run_timestamp_seconds", "Unix time of the latest monitoring pass"
+        )
+        moments = [m for m in (_epoch(drift), _epoch(quality)) if m is not None]
+        if moments:
+            last_run.add_metric([], max(moments))
+        yield last_run
+
+        validation = _load(self.directory / DATA_VALIDATION_FILE)
+        yield self._status_family(
+            "data_validation_status", "Latest pipeline data-validation result", validation
+        )
+        failures = GaugeMetricFamily(
+            "data_validation_failures", "Failed checks in the latest validated dataset"
+        )
+        if validation and _finite(validation.get("failure_count")):
+            failures.add_metric([], float(validation["failure_count"]))
+        yield failures

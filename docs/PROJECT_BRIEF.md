@@ -1,6 +1,6 @@
 # Project brief, decisions and AI Canvas
 
-Status: **topic/tools selected; P0 integration framework implemented; data/model/API components pending**. Owner: P0 @uzuz3737 with all members. See [team roles](TEAM_WORK.md), [P0 handoff](P0_HANDOFF.md) and [dataset guide](DATASET.md).
+Status: **all components implemented and the full lifecycle verified in Docker** (see [evidence index](evidence/INDEX.md)); stakeholder validation is still open. Owner: P0 @uzuz3737 with all members. See [team roles](TEAM_WORK.md), [P0 handoff](P0_HANDOFF.md) and [dataset guide](DATASET.md).
 
 ## Problem and scope
 
@@ -18,21 +18,21 @@ This is the authoritative location for project-specific choices. Proposed values
 | --- | --- | --- |
 | Topic | Credit-default prediction/review prioritization; binary classification | All |
 | Real stakeholder and approval | TBD: representative, workflow evidence, topic approval and uniqueness | P0 |
-| Dataset/mapping | UCI 350; [Dataset guide](DATASET.md); checksum/profile TBD | P1 |
+| Dataset/mapping | UCI 350, source archive SHA-256 `56c885f8…`, canonical dataset version `d1bc5f13…`, 30,000 rows; [Dataset guide](DATASET.md) | P1 |
 | Tools | Docker, TFDV, MLflow/Registry, Airflow, FastAPI, Prometheus/Grafana, GitHub Actions, Git/GitHub | User selected |
-| Modeling | Proposed CPU scikit-learn, logistic baseline and tree candidates | P2 |
-| Splits | Proposed stratified 60/20/10/10 train/validation/final-test/monitoring, seed 42, disjoint IDs | P1/P2 |
+| Modeling | CPU scikit-learn: logistic-regression baseline, random forest, histogram gradient boosting; random forest selected (validation AP 0.5375) | P2 |
+| Splits | Stratified 60/20/10/10 train/validation/final-test/monitoring (18,000/6,000/3,000/3,000), seed 42, disjoint IDs | P1/P2 |
 | Features | Initial contract accepts 23 source features; selected model features versioned separately | P1/P2 |
-| Optimizing metric | Proposed `average_precision` (AP), positive class 1; maximize | P2 |
-| Decision threshold | TBD: select on validation by review budget/error cost; persist with model | P0/P2 |
-| Quality gates | TBD: numeric AP floor, baseline improvement/current-model tolerance, any recall/calibration gates | P0/P2 |
+| Optimizing metric | `average_precision` (AP), positive class 1; maximize | P2 |
+| Decision threshold | Maximizes validation F1 and is stored in the model bundle (0.5068 for the deployed random forest); a review-budget threshold is future work | P0/P2 |
+| Quality gates | AP ≥ 0.40 and at most 0.02 AP below the comparison model on the same validation rows ([quality_gates.yaml](../configs/quality_gates.yaml)) | P0/P2 |
 | Business metric | Proposed recall/precision at review budget and explicitly assumed offline error-cost proxy | P0/P2 |
-| Serving | Proposed synchronous API, model loaded once, bounded batches | P3 |
-| Labels | Historical replay keyed by request/instance for demo; live label collection/delay TBD | P1/P3 |
-| SLO | Discussion targets below; confirmed workload/hardware/gates TBD | P0/P3 |
-| Monitoring/retrain | Confirm windows, thresholds and triggers in [contracts](INTERFACE_CONTRACTS.md) | All |
+| Serving | Synchronous FastAPI, model loaded once per deployment, batches up to 1,000 rows ([Serving](SERVING.md)) | P3 |
+| Labels | Delayed labels posted to `/feedback` per request/instance; the demo replays held-out monitoring rows | P1/P3 |
+| SLO | p95 ≤ 300 ms, ≥ 20 req/s, ≤ 1% errors at batch 1 × 10 clients; measured 204.5 ms / 60 req/s / 0% in `full-run-002` | P0/P3 |
+| Monitoring/retrain | 500-row windows; data drift PSI > 0.0662; quality degradation > 0.123; retrain only on a labeled quality alert with a new approved snapshot, 1 h cooldown ([monitoring.yaml](../configs/monitoring.yaml)) | All |
 | Promotion/rollback | Exact approved version, deployment ACK/readiness/smoke; preserve last healthy version | P0/P2/P3 |
-| Runtime | P0 pins Python 3.11 containers/CI, Airflow 2.10.5, MLflow 2.19.0 and framework locks; Docker/component compatibility remains unverified | P0/all |
+| Runtime | Python 3.11 containers/CI, Airflow 2.10.5, MLflow 2.19.0, hash-locked dependencies; verified in Docker on 4 October 2026 | P0/all |
 | Team | P0 @uzuz3737, P1 @OuanEng, P2 @pairot230, P3 @thanachaithongbai-hue; student IDs/availability and exception/additional members needed | P0 |
 
 ## AI Project Canvas — proposed working template

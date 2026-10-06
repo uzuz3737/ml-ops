@@ -106,6 +106,25 @@ def confined_path(value: str | Path, root: Path, *, must_exist: bool = False) ->
     return resolved
 
 
+DATA_FILE_SUFFIXES = (".csv", ".json", ".xls", ".xlsx")
+
+
+def data_file_reference(value, root: Path) -> dict:
+    """Pin an operator-supplied dataset under data/ so a run can only ingest that content."""
+    if not isinstance(value, str) or not value.strip():
+        raise PipelineError("invalid_data_file", "data_file must be a nonempty project path.")
+    path = confined_path(value, root)
+    if not path.is_relative_to((root / "data").resolve()):
+        raise PipelineError("path_outside_root", "data_file must be inside the data/ directory.")
+    if path.suffix.lower() not in DATA_FILE_SUFFIXES:
+        raise PipelineError(
+            "invalid_data_file", "data_file must be a .csv, .json, .xls or .xlsx file."
+        )
+    if not path.is_file():
+        raise PipelineError("missing_file", "data_file does not exist under data/.")
+    return {"uri": path.relative_to(root.resolve()).as_posix(), "sha256": sha256_file(path)}
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:

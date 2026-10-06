@@ -21,7 +21,7 @@ from ..pipelines.contracts import PipelineError
 from . import telemetry
 from .bundle import ModelSlot, load_model
 from .events import EventStore, FeedbackError
-from .schema import check_predict_body
+from .schema import IDENTIFIER, check_predict_body
 from .settings import Settings, load_settings
 from .watcher import DeploymentWatcher
 
@@ -134,7 +134,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         model = slot.get()
         if model is None:
             return _error(503, request_id, "model_not_ready", "No verified model is loaded.")
-        instances = body["instances"]
+        identifiers = [item.get(IDENTIFIER) for item in body["instances"]]
+        instances = [{name: item[name] for name in settings.features} for item in body["instances"]]
         try:
             predictions = await run_in_threadpool(score, model, instances)
         except PipelineError as error:
@@ -151,11 +152,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         for item in predictions:
             telemetry.PREDICTIONS.labels(str(item["label"])).inc()
             telemetry.PROBABILITY.observe(item["default_probability"])
+        answers = [
+            {IDENTIFIER: client, **item} if client is not None else item
+            for client, item in zip(identifiers, predictions, strict=True)
+        ]
         return JSONResponse(
             {
                 "request_id": request_id,
                 "model_version": model.model_version,
-                "predictions": predictions,
+                "predictions": answers,
             },
             headers={"X-Request-ID": request_id},
         )

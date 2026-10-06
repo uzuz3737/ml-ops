@@ -1,5 +1,7 @@
 # Team work and handoffs
 
+> **Status (6 October 2026):** written during development and kept as a record. Everything handed off here has since been delivered; "pending" items below are historical. Current behavior: [README](../README.md); results: [evidence index](evidence/INDEX.md).
+
 The confirmed starting team is **@uzuz3737 (you), @OuanEng, @pairot230 and @thanachaithongbai-hue**. Friends are assigned in the order supplied by the user. P0's handle is inferred from the existing Git remote and Git identity. Availability and student IDs remain to be recorded.
 
 The course requires **5–7 members**. The confirmed four-person roster does not meet that requirement unless an instructor exception is granted. P0 should arrange another member or resolve that exception promptly. Expansion options below preserve the same work packages.

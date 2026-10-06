@@ -1,6 +1,6 @@
 # Proposed system architecture
 
-**Status: P0 integration framework implemented; complete lifecycle pending.** Runner/gates, Airflow DAG, container configuration/wrappers and CI files exist. Data/model/API/quality-monitoring adapters and real container/registry/deployment evidence remain assigned work. [P0 handoff](P0_HANDOFF.md) records the executable boundaries and verification limits; this document retains the target complete architecture.
+**Status: implemented and verified.** Every component below exists and the full lifecycle (raw data → validation → training → registry → gates → deployment → monitoring → rollback/retraining) has run in Docker; see the [evidence index](evidence/INDEX.md). [P0 handoff](P0_HANDOFF.md) records the executable stage boundaries.
 
 The selected task is binary credit-card default prediction using [UCI Default of Credit Card Clients, dataset 350](https://archive.ics.uci.edu/dataset/350/default%2Bof%2Bcredit%2Bcard%2Bclients). UCI lists 30,000 examples, 23 features, no missing values, and a binary target with `1` meaning default and `0` meaning no default. The project is a classroom decision-support prototype; a real stakeholder interview and topic approval still need evidence. See [Project brief](PROJECT_BRIEF.md), [Development plan](DEVELOPMENT_PLAN.md), and [Interface contracts](INTERFACE_CONTRACTS.md) for remaining decisions and the concrete credit-feature schema.
 
@@ -51,14 +51,14 @@ All training nodes form an Airflow DAG with explicit task dependencies. Required
 | Monitoring | Prometheus + Grafana plus project quality/drift jobs | Service dashboards and label-based model monitoring |
 | CI/CD | GitHub Actions | Enforce code, data, and model gates and record pass/fail evidence |
 
-These tools are the team's selected stack. P0 implements the runner, gate policy, Airflow graph, Compose/wrappers and CI framework; real friend components and actual container behavior remain pending. See [P0 handoff](P0_HANDOFF.md) for executable mappings, pins and verification limits. Every required capability is listed in [Requirements](REQUIREMENTS.md). P1 resolves compatible TFDV dependencies in the Linux worker, while P3 supplies API/runtime model dependencies.
+These tools are the team's selected stack. P0 implemented the runner, gate policy, Airflow graph, Compose/wrappers and CI; P1–P3 implemented the data, model, serving and monitoring components, and the whole stack has run in Docker. See [P0 handoff](P0_HANDOFF.md) for executable mappings, pins and verification limits. Every required capability is listed in [Requirements](REQUIREMENTS.md). P1 resolves compatible TFDV dependencies in the Linux worker, while P3 supplies API/runtime model dependencies.
 
 ## Proposed runtime topology
 
 | Service | Host port | Internal role | Persistence |
 | --- | --- | --- | --- |
 | `api` | `8000` | Prediction, feedback, health, metrics | Active immutable model bundle; prediction/feedback event storage |
-| `mlflow` | `5000` | Tracking UI/API and model registry | Database-backed metadata store and artifact volume |
+| `mlflow` | `5050` on the host (`5000` inside) | Tracking UI/API and model registry | Database-backed metadata store and artifact volume |
 | `airflow` web/API service | `8080` | Orchestration UI/API for local runs | Metadata database volume |
 | Airflow scheduler and task runner | No inbound host port required | Executes training and monitoring DAGs | Reads data/config; writes run reports and artifacts |
 | `prometheus` | `9090` | Scrapes API and monitoring metrics | Time-series volume |

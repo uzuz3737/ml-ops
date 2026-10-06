@@ -12,6 +12,9 @@ import math
 from ..data.policy import DOMAINS, validate_rows
 
 POSITIVE = frozenset({"AGE", "LIMIT_BAL"})
+# Rows copied from the UCI file carry their client ID. It is echoed back for
+# matching but never reaches the model, exactly as in training.
+IDENTIFIER = "ID"
 
 
 def _finite(value) -> bool:
@@ -34,8 +37,14 @@ def check_instance(index: int, instance, features: tuple[str, ...]) -> list[dict
     if not isinstance(instance, dict):
         return [_issue("type", "Each instance must be a JSON object.", index)]
     problems = []
-    for name in sorted(set(instance) - set(features)):
+    for name in sorted(set(instance) - set(features) - {IDENTIFIER}):
         problems.append(_issue("unexpected_field", "Field is not a model input.", index, name))
+    if IDENTIFIER in instance:
+        value = instance[IDENTIFIER]
+        if isinstance(value, bool) or type(value) is not int or value <= 0:
+            problems.append(
+                _issue("identifier", "ID must be a positive whole number.", index, IDENTIFIER)
+            )
     for name in features:
         if name not in instance:
             problems.append(_issue("missing_field", "Required feature is missing.", index, name))
@@ -55,7 +64,9 @@ def check_instance(index: int, instance, features: tuple[str, ...]) -> list[dict
             problems.append(_issue("out_of_range", "Value must be positive.", index, name))
         elif name.startswith("PAY_AMT") and value < 0:
             problems.append(_issue("out_of_range", "Payment cannot be negative.", index, name))
-    if not problems and validate_rows([instance], training=False):
+    if not problems and validate_rows(
+        [{name: instance[name] for name in features}], training=False
+    ):
         problems.append(_issue("policy", "Instance violates the data policy.", index))
     return problems
 

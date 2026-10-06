@@ -22,8 +22,10 @@ from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from mlops_project.pipelines.contracts import (
+    STAGES,
     PipelineError,
     confined_path,
+    data_file_reference,
     load_config,
     validate_run_id,
 )
@@ -180,6 +182,37 @@ def verify_deployment(project_root: Path, run_id: str, api_url: str, config: dic
     }
 
 
+def explain_failure(project_root: Path, run_id: str, config: dict) -> None:
+    """Print the stage that stopped the run and, for bad data, what was wrong."""
+    try:
+        artifacts = confined_path(
+            config["pipeline"].get("artifact_root", "artifacts"), project_root
+        )
+    except PipelineError:
+        return
+    run_directory = artifacts / "runs" / run_id
+    for step in STAGES:
+        try:
+            record = read_record(run_directory / f"{step}.json")
+        except LaunchError:
+            continue
+        if record.get("state") == "failed":
+            error = record.get("error", {})
+            print(f"Stopped at stage '{step}': {error.get('code')} — {error.get('message')}")
+            break
+    try:
+        alert = read_record(run_directory / "data-validation-alert.json")
+    except LaunchError:
+        return
+    print(f"Data validation alert: {len(alert.get('failures', []))} failed checks")
+    for key in ("missing_columns", "unexpected_columns"):
+        if alert.get(key):
+            print(f"  {key}: {', '.join(alert[key])}")
+    for item in alert.get("failure_summary", [])[:10]:
+        print(f"  {item['field']}: {item['rule']} in {item['rows']} rows")
+    print(f"  details: artifacts/runs/{run_id}/validation-report.json")
+
+
 def launch(args):
     project_root = Path(args.project_root).resolve()
     config = (project_root / args.config).resolve()
@@ -202,6 +235,13 @@ def launch(args):
         raise LaunchError(
             "Run ID must contain 1–128 safe alphanumeric, dot, underscore or hyphen characters"
         ) from None
+    conf = {"pipeline_run_id": run_id, "config_path": "configs/" + relative_config.as_posix()}
+    data_file = getattr(args, "data_file", "")
+    if data_file:
+        try:
+            conf["data_file"] = data_file_reference(data_file, project_root)["uri"]
+        except PipelineError as error:
+            raise LaunchError(f"--data-file: {error.message}") from None
     username = os.environ.get("AIRFLOW_ADMIN_USERNAME", "")
     password = os.environ.get("AIRFLOW_ADMIN_PASSWORD", "")
     if not username or not password:
@@ -228,13 +268,7 @@ def launch(args):
     request_json(
         dag_url + "/dagRuns",
         method="POST",
-        payload={
-            "dag_run_id": run_id,
-            "conf": {
-                "pipeline_run_id": run_id,
-                "config_path": "configs/" + relative_config.as_posix(),
-            },
-        },
+        payload={"dag_run_id": run_id, "conf": conf},
         authorization=authorization,
     )
     print(f"Triggered Airflow run {run_id}; waiting for its terminal result.", flush=True)
@@ -246,6 +280,7 @@ def launch(args):
             print(f"Airflow run state: {state}", flush=True)
             last_state = state
         if state == "failed":
+            explain_failure(project_root, run_id, project_config)
             raise LaunchError(
                 f"Airflow run {run_id} failed; inspect task logs and artifacts/runs/{run_id}"
             )
@@ -284,6 +319,9 @@ def main(argv=None):
     parser.add_argument("--project-root", default="/workspace")
     parser.add_argument("--timeout-seconds", type=int, default=7200)
     parser.add_argument("--run-id", default="")
+    parser.add_argument(
+        "--data-file", default="", help="Train from this CSV/JSON/XLS(X) under data/ instead of UCI"
+    )
     args = parser.parse_args(argv)
     if not 30 <= args.timeout_seconds <= 7200:
         parser.error("--timeout-seconds must be from 30 through 7200")

@@ -28,8 +28,11 @@ def execute_remote(
     *,
     worker_url: str | None = None,
     timeout_seconds: float | None = None,
+    data_file: str | None = None,
 ) -> dict:
     validate_step(step)
+    if data_file is not None and (not isinstance(data_file, str) or not data_file):
+        raise PipelineError("invalid_data_file", "data_file must be a nonempty project path.")
     validate_run_id(run_id)
     if not isinstance(config_path, str) or not config_path:
         raise PipelineError(
@@ -61,9 +64,12 @@ def execute_remote(
         ) from None
     if isinstance(timeout_seconds, bool) or not math.isfinite(timeout) or timeout <= 0:
         raise PipelineError("invalid_timeout", "Worker timeout must be a finite positive number.")
+    body = {"step": step, "run_id": run_id, "config_path": config_path}
+    if data_file is not None:
+        body["data_file"] = data_file
     request = urllib.request.Request(
         url.rstrip("/") + "/steps",
-        data=json_bytes({"step": step, "run_id": run_id, "config_path": config_path}),
+        data=json_bytes(body),
         headers={"Content-Type": "application/json"},
         method="POST",
     )

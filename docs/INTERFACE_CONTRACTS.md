@@ -2,7 +2,7 @@
 
 **Status: P0 callable-stage/worker contracts are implemented; data/model/API contracts below remain proposed until real friend components are integrated.** Exact executable adapter names, context/results and candidate evidence fields are frozen in [P0 handoff](P0_HANDOFF.md) and `configs/project.yaml`. Freeze the remaining contract revision after UCI profiling and quality/SLO agreement, then change it through review. The selected stack is Docker, TFDV, MLflow tracking/registry, Airflow, FastAPI, Prometheus + Grafana, and GitHub Actions.
 
-See [Architecture](ARCHITECTURE.md), [Development plan](DEVELOPMENT_PLAN.md), and [Team work](TEAM_WORK.md). P0 pipeline modules are available; P1 data/features, P2 training/registry/quality and P3 serving/export modules are pending.
+See [Architecture](ARCHITECTURE.md), [Development plan](DEVELOPMENT_PLAN.md), and [Team work](TEAM_WORK.md). All modules described here are implemented: P0 pipelines, P1 data/features, P2 training/registry/quality and P3 serving/export.
 
 ## Decisions that must precede implementation
 

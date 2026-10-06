@@ -8,9 +8,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
-from contextlib import contextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 
 from .contracts import (
@@ -19,7 +16,7 @@ from .contracts import (
     PipelineError,
     configuration_snapshot,
     confined_path,
-    json_bytes,
+    data_file_reference,
     load_config,
     project_directory,
     resolve_adapter,
@@ -29,76 +26,10 @@ from .contracts import (
     validate_step,
 )
 
+# Evidence helpers live in jsonio; they remain importable from here for old callers.
+from .jsonio import atomic_json, file_lock, read_record, utc_now
 
-def utc_now() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
-def atomic_json(path: Path, value: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(json_bytes(value))
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        Path(temporary).unlink(missing_ok=True)
-
-
-@contextmanager
-def file_lock(path: Path, timeout_seconds: float = 5):
-    """OS locks release after a process crash and work on Windows and Linux."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+b") as handle:
-        handle.seek(0, os.SEEK_END)
-        if handle.tell() == 0:
-            handle.write(b"0")
-            handle.flush()
-        deadline = time.monotonic() + timeout_seconds
-        while True:
-            try:
-                if os.name == "nt":
-                    import msvcrt
-
-                    handle.seek(0)
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-                else:
-                    import fcntl
-
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except OSError:
-                if time.monotonic() >= deadline:
-                    raise PipelineError(
-                        "stage_busy", "Another worker is already executing this pipeline stage."
-                    ) from None
-                time.sleep(0.05)
-        try:
-            yield
-        finally:
-            if os.name == "nt":
-                import msvcrt
-
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-def read_record(path: Path) -> dict:
-    try:
-        record = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        raise PipelineError(
-            "missing_evidence", "A required upstream stage record is missing or unreadable."
-        ) from None
-    if not isinstance(record, dict):
-        raise PipelineError("invalid_evidence", "A stage record must be a JSON object.")
-    return record
+__all__ = ["atomic_json", "file_lock", "read_record", "run_step", "utc_now"]
 
 
 def _run_adapter(reference: str, context: dict, timeout: float, run_dir: Path) -> dict:
@@ -213,6 +144,7 @@ def run_step(
     artifact_root: str | Path | None = None,
     *,
     project_root: str | Path | None = None,
+    data_file: str | None = None,
 ) -> dict:
     validate_step(step)
     validate_run_id(run_id)
@@ -222,9 +154,14 @@ def run_step(
         artifact_root or config["pipeline"].get("artifact_root", "artifacts"), root
     )
     run_dir = confined_path(Path("runs") / run_id, artifacts)
-    run_dir.mkdir(parents=True, exist_ok=True)
     config_hash, config_snapshot = configuration_snapshot(config, config_file, root)
     retraining = _retraining_context(run_id, config, config_hash, artifacts, root)
+    data_source = data_file_reference(data_file, root) if data_file is not None else None
+    if data_source and retraining:
+        raise PipelineError(
+            "invalid_data_file", "Retraining reads its approved snapshot, not a data_file."
+        )
+    run_dir.mkdir(parents=True, exist_ok=True)
     with file_lock(run_dir / ".run.lock"):
         manifest_path = run_dir / "run.json"
         if manifest_path.exists():
@@ -233,6 +170,7 @@ def run_step(
                 manifest.get("run_id") != run_id
                 or manifest.get("config_sha256") != config_hash
                 or manifest.get("retraining") != retraining
+                or manifest.get("data_file") != data_source
             ):
                 raise PipelineError(
                     "stale_evidence",
@@ -247,6 +185,7 @@ def run_step(
                     "config_sha256": config_hash,
                     "configuration_snapshot": config_snapshot,
                     "retraining": retraining,
+                    "data_file": data_source,
                     "created_at": utc_now(),
                 },
             )
@@ -304,6 +243,7 @@ def run_step(
             "run_dir": str(run_dir),
             "inputs": inputs,
             "retraining": retraining,
+            "data_file": data_source,
         }
         try:
             result = _run_adapter(
@@ -363,6 +303,7 @@ def main() -> int:
     parser.add_argument("--run-id")
     parser.add_argument("--config", default="configs/project.yaml")
     parser.add_argument("--project-root")
+    parser.add_argument("--data-file", help="CSV/JSON/XLS(X) under data/ instead of UCI")
     args = parser.parse_args()
     if args.adapter_child:
         return _adapter_child(*args.adapter_child)
@@ -371,7 +312,13 @@ def main() -> int:
     try:
         print(
             json.dumps(
-                run_step(args.step, args.run_id, args.config, project_root=args.project_root)
+                run_step(
+                    args.step,
+                    args.run_id,
+                    args.config,
+                    project_root=args.project_root,
+                    data_file=args.data_file,
+                )
             )
         )
         return 0

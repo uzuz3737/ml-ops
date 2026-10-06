@@ -26,7 +26,7 @@ from .contracts import (
     project_directory,
     validate_run_id,
 )
-from .runner import atomic_json, file_lock, read_record
+from .jsonio import atomic_json, file_lock, read_record
 
 
 class AirflowClient:

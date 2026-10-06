@@ -17,7 +17,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 from mlops_project.pipelines.contracts import confined_path, sha256_file
-from mlops_project.pipelines.runner import atomic_json, file_lock
+from mlops_project.pipelines.jsonio import atomic_json, file_lock
 from mlops_project.training.bundle import environment, load_bundle, probabilities
 from mlops_project.training.inputs import load_inputs, shared_preprocessor, verified_path
 from mlops_project.training.metrics import classification_metrics, select_threshold
@@ -219,6 +219,20 @@ def train_candidate_2(context):
     return _train(context, "train_candidate_2")
 
 
+def _deployed_champion(context):
+    """The confirmed active bundle, if it is the model version whose alert started this run."""
+    root = Path(context["project_root"])
+    deployments = context["config"].get("serving", {}).get("deployments_dir")
+    path = confined_path(Path(deployments or "artifacts/deployments") / "active-model.json", root)
+    try:
+        active = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if str(active.get("model_version")) != str(context["retraining"].get("model_version")):
+        raise ValueError("The alerted model is no longer the deployed champion")
+    return {"uri": active["artifact_uri"], "sha256": active["artifact_sha256"]}
+
+
 def evaluate(context):
     results = [context["inputs"][name] for name in EXPERIMENTS]
     baseline = results[0]
@@ -278,6 +292,8 @@ def evaluate(context):
         "average_precision": candidates[0]["metrics"]["average_precision"],
     }
     champion = context["config"].get("training", {}).get("comparison_bundle")
+    if context.get("retraining") and not champion:
+        champion = _deployed_champion(context)
     if context.get("retraining") and not champion:
         raise ValueError(
             "Retraining requires current champion comparison on the same permitted validation"

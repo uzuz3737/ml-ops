@@ -1,5 +1,7 @@
 # P0 implementation and friend handoff
 
+> **Status (6 October 2026):** written during development and kept as a record. Everything handed off here has since been delivered; "pending" items below are historical. Current behavior: [README](../README.md); results: [evidence index](evidence/INDEX.md).
+
 Owner: **@uzuz3737 (you)**. Friends are assigned in the order requested: **@OuanEng (P1)**, **@pairot230 (P2)**, **@thanachaithongbai-hue (P3)**. This document records the integration increment and the concrete work each friend must connect. Course acceptance remains in [Requirements](REQUIREMENTS.md).
 
 ## What P0 implemented

@@ -98,6 +98,36 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(adapter.call_count, 1)
         self.assertEqual(first["result"]["run_id"], "test-run")
 
+    def test_data_file_is_pinned_to_the_run_and_confined_to_data(self):
+        (self.root / "data").mkdir()
+        bad = self.root / "data/bad.csv"
+        bad.write_text("ID,AGE\n1,-5\n", encoding="utf-8")
+        contexts = []
+
+        def capture(reference, context, timeout, run_dir):
+            contexts.append(context)
+            return self.successful_adapter(reference, context, timeout, run_dir)
+
+        with patch("mlops_project.pipelines.runner._run_adapter", side_effect=capture):
+            run_step("ingest", "file-run", self.config_path, project_root=self.root,
+                     data_file="data/bad.csv")  # fmt: skip
+        pinned = {"uri": "data/bad.csv", "sha256": sha256_file(bad)}
+        self.assertEqual(contexts[0]["data_file"], pinned)
+        manifest = json.loads((self.root / "artifacts/runs/file-run/run.json").read_text())
+        self.assertEqual(manifest["data_file"], pinned)
+        bad.write_text("ID,AGE\n1,-6\n", encoding="utf-8")
+        with self.assertRaises(PipelineError) as caught:
+            run_step("validate", "file-run", self.config_path, project_root=self.root,
+                     data_file="data/bad.csv")  # fmt: skip
+        self.assertEqual(caught.exception.code, "stale_evidence")
+        (self.root / "outside.csv").write_text("x\n", encoding="utf-8")
+        for path, code in (("outside.csv", "path_outside_root"), ("data/none.csv", "missing_file"),
+                           ("data/../project.yaml", "path_outside_root")):  # fmt: skip
+            with self.subTest(path=path), self.assertRaises(PipelineError) as caught:
+                run_step("ingest", "other", self.config_path, project_root=self.root,
+                         data_file=path)  # fmt: skip
+            self.assertEqual(caught.exception.code, code)
+
     def test_changed_referenced_policy_requires_new_run(self):
         with patch(
             "mlops_project.pipelines.runner._run_adapter", side_effect=self.successful_adapter
