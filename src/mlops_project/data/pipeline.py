@@ -1,7 +1,6 @@
 """P0 callable stages. All downstream references are relative to the current run."""
 
 import json
-import math
 import shutil
 import subprocess
 import urllib.request
@@ -14,14 +13,11 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from mlops_project.data.policy import FEATURES, TARGET, validate_rows
+from mlops_project.data.tables import read_table
 from mlops_project.pipelines.contracts import PipelineError, confined_path, sha256_file
 
 SOURCE = "https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip"
 SOURCE_SHA256 = "56c885f84457f6680f8438f02bfcdac9579323d8a94465ee5f26e32baa727602"
-# Headers found in copies of UCI 350: the original spreadsheet, the Kaggle CSV
-# (PAY_1, dotted target) and ucimlrepo's generic X1..X23/Y names.
-GENERIC_COLUMNS = {f"X{i}": name for i, name in enumerate(FEATURES, start=1)} | {"Y": TARGET}
-TARGET_ALIASES = {"default payment next month", "default next month"}
 
 
 def _write(context, name, value):
@@ -88,52 +84,6 @@ def _summary(failures):
     ]
 
 
-def _cell(value):
-    """Keep what the file actually says; only unambiguous numerals become numbers."""
-    if value is None or (isinstance(value, float) and math.isnan(value)):
-        return None
-    if isinstance(value, bool) or not isinstance(value, str):
-        return value.item() if hasattr(value, "item") else value
-    text = value.strip()
-    if not text:
-        return None
-    for parse in (int, float):
-        try:
-            number = parse(text)
-        except ValueError:
-            continue
-        return number if math.isfinite(number) else text
-    return text
-
-
-def _canonical(name):
-    text = str(name).strip()
-    if text.lower().replace(".", " ").replace("_", " ") in TARGET_ALIASES:
-        return TARGET
-    return GENERIC_COLUMNS.get(text, text)
-
-
-def _load_table(path):
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        return pd.read_csv(path, dtype=str, keep_default_na=False)
-    if suffix == ".json":
-        value = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(value, dict):
-            value = value.get("instances", value.get("records"))
-        if not isinstance(value, list) or not all(isinstance(r, dict) for r in value):
-            raise ValueError("JSON data must be a list of row objects")
-        return pd.DataFrame(value, dtype=object)
-    raw = pd.read_excel(path, header=None, dtype=object)
-    # The UCI spreadsheet has a generic X1..Y row above the descriptive header.
-    header = next(
-        (i for i in range(min(3, len(raw))) if "LIMIT_BAL" in set(raw.iloc[i].astype(str))), 0
-    )
-    frame = raw.iloc[header + 1 :].reset_index(drop=True)
-    frame.columns = raw.iloc[header]
-    return frame
-
-
 def _ingest_file(context):
     """Ingest an operator file as-is; the validate stage decides whether it may be used."""
     reference = context["data_file"]
@@ -145,7 +95,7 @@ def _ingest_file(context):
     copy = run / f"source{source.suffix.lower()}"
     shutil.copyfile(source, copy)
     try:
-        frame = _load_table(copy)
+        records = read_table(copy)
     except Exception as error:  # unreadable input is bad data, not a worker crash
         report = {
             **_base(context),
@@ -156,11 +106,7 @@ def _ingest_file(context):
         report["failure_summary"] = _summary(report["failures"])
         _publish_validation(context, report, alert=True)
         raise PipelineError("data_validation_failed", "data_file could not be parsed.") from None
-    frame = frame.rename(columns=_canonical)
-    if "PAY_1" in frame.columns and "PAY_0" not in frame.columns:
-        frame = frame.rename(columns={"PAY_1": "PAY_0"})
-    records = [{str(k): _cell(v) for k, v in row.items()} for row in frame.to_dict("records")]
-    generated_ids = "ID" not in frame.columns
+    generated_ids = not records or "ID" not in records[0]
     if generated_ids:  # ID is lineage only; number rows so splits stay client-disjoint
         records = [{"ID": index, **row} for index, row in enumerate(records, start=1)]
     path = run / "data.json"

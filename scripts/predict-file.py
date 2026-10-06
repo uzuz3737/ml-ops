@@ -19,8 +19,8 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from mlops_project.data.pipeline import _canonical, _cell, _load_table  # noqa: E402
 from mlops_project.data.policy import TARGET  # noqa: E402
+from mlops_project.data.tables import read_table  # noqa: E402
 
 
 def post(url: str, body: dict) -> tuple[int, dict]:
@@ -44,10 +44,7 @@ def main() -> int:
     parser.add_argument("--out", help="also write every response to this JSON file")
     args = parser.parse_args()
 
-    frame = _load_table(Path(args.file)).rename(columns=_canonical)
-    if "PAY_1" in frame.columns and "PAY_0" not in frame.columns:
-        frame = frame.rename(columns={"PAY_1": "PAY_0"})
-    rows = [{str(k): _cell(v) for k, v in r.items()} for r in frame.to_dict("records")]
+    rows = read_table(args.file)
 
     results, accepted, correct, labelled = [], 0, 0, 0
     print(f"{'row':>4} {'ID':>7} {'status':>6}  result")
