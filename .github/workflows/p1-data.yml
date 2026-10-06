@@ -10,6 +10,7 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install --require-hashes -r requirements/p1-worker.lock
       - run: python -m pip install --require-hashes -r requirements/dev.lock
+      - run: python -m pip check
       - run: python -c "import tensorflow_data_validation; import mlops_project.data.pipeline"
         env:
           PYTHONPATH: src
@@ -28,7 +29,7 @@ jobs:
           mkdir -p artifacts
           chmod 777 artifacts
           docker run --rm --user 0 p1-worker:test python -m pip check
-          docker run --rm --user 0 -e P1_UCI_INTEGRATION=1 -v "$PWD/artifacts:/workspace/artifacts" p1-worker:test sh -c 'python -m pip install --require-hashes -r requirements/dev.lock && python -m pytest tests/test_p1.py -q --basetemp artifacts/p1-tests'
+          docker run --rm --user 0 -e P1_UCI_INTEGRATION=1 -v "$PWD/artifacts:/workspace/artifacts" p1-worker:test sh -c 'python -m pip install --require-hashes -r requirements/dev.lock && python -m pip check && python -m pytest tests/test_p1.py -q --basetemp artifacts/p1-tests'
       - name: Run actual P0 adapters as the image app user
         run: |
           for stage in ingest validate split features; do
