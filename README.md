@@ -2,6 +2,8 @@
 
 **ภาษาไทย** · [English](#english)
 
+[คู่มือปฏิบัติสำหรับทีม: ติดตั้ง รัน train/retrain monitoring และ rollback](docs/TEAM_RUNBOOK_TH.md)
+
 ---
 
 ## ภาษาไทย
