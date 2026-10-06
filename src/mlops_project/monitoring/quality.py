@@ -161,6 +161,7 @@ def evaluate_quality(
         **report,
         "metrics": metrics,
         "observed": degradation,
+        "threshold": policy["quality_degradation_threshold"],
         "degradation_components": components,
         "threshold_crossed": crossed,
         "status": "alert" if crossed else "ok",
@@ -196,6 +197,7 @@ def retraining_alert(
         "created_at": created_at,
         "reason": "quality",
         "observed": report["observed"],
+        "threshold": report["threshold"],
         "threshold_crossed": True,
         **{
             k: report[k]

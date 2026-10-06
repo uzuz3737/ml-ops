@@ -184,3 +184,13 @@ def test_alert_requires_independent_approved_dataset(quality_inputs):
     }
     alert = retraining_alert(report, candidate_evidence=evidence, **args)
     assert alert["label_coverage"] == 1 and alert["positive_label_count"] == 10
+    # Exercise the actual controller boundary: classification threshold (0.5)
+    # must not replace the calibrated quality degradation threshold (0.15).
+    from datetime import datetime
+
+    from mlops_project.pipelines.retraining import _validate_alert
+
+    assert alert["threshold"] == options["policy"]["quality_degradation_threshold"]
+    assert _validate_alert(
+        alert, options["policy"], datetime.fromisoformat(options["as_of"])
+    ) == "drift-1"
