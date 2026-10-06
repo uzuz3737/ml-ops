@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from mlops_project.pipelines.runner import atomic_json
+from mlops_project.pipelines.jsonio import atomic_json
 from mlops_project.training import pipeline
 
 

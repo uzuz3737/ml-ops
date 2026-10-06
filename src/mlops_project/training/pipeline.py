@@ -17,7 +17,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 from mlops_project.pipelines.contracts import confined_path, sha256_file
-from mlops_project.pipelines.runner import atomic_json, file_lock
+from mlops_project.pipelines.jsonio import atomic_json, file_lock
 from mlops_project.training.bundle import environment, load_bundle, probabilities
 from mlops_project.training.inputs import load_inputs, shared_preprocessor, verified_path
 from mlops_project.training.metrics import classification_metrics, select_threshold

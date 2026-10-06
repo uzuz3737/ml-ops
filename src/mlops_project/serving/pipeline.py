@@ -21,7 +21,7 @@ import httpx
 import yaml
 
 from ..pipelines.contracts import PipelineError, confined_path, sha256_file
-from ..pipelines.runner import atomic_json, read_record, utc_now
+from ..pipelines.jsonio import atomic_json, read_record, utc_now
 
 _PROVENANCE = (
     "model_name",

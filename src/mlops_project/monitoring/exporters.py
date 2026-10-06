@@ -22,7 +22,7 @@ from pathlib import Path
 
 from prometheus_client.core import GaugeMetricFamily
 
-from ..pipelines.runner import atomic_json, utc_now
+from ..pipelines.jsonio import atomic_json, utc_now
 
 STATUSES = ("ok", "alert", "insufficient_data", "error")
 QUALITY_METRICS = ("average_precision", "roc_auc", "precision", "recall", "f1", "brier_score")

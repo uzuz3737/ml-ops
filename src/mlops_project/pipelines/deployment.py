@@ -31,7 +31,8 @@ from .contracts import (
     sha256_file,
     validate_run_id,
 )
-from .runner import _run_adapter, atomic_json, file_lock, read_record, utc_now
+from .jsonio import atomic_json, file_lock, read_record, utc_now
+from .runner import _run_adapter
 
 _IDENTITY = (
     "model_name",
